@@ -1,0 +1,25 @@
+{{define "account-delete-confirm"}}
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>确认删除账号 · Emby 账号管理</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <main class="auth-shell">
+    <section class="auth-card">
+      <p class="eyebrow">危险操作</p>
+      <h1 class="page-title">确认删除业务账号 {{.Account.Username}}</h1>
+      <p class="page-lead">这会从 Emby 删除对应用户及其关联数据，且无法恢复。</p>
+      <form method="post" action="/admin/accounts/{{.Account.ID}}/delete/confirm">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <button class="danger btn-block" type="submit">确认永久删除</button>
+      </form>
+      <p class="auth-foot"><a href="/admin/accounts">取消并返回账号列表</a></p>
+    </section>
+  </main>
+</body>
+</html>
+{{end}}

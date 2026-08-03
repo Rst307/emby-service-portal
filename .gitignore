@@ -1,0 +1,12 @@
+.env
+data/
+*.db
+*.db-shm
+*.db-wal
+coverage*.out
+
+bin/
+dist/
+*.log
+*.pid
+emby-user-manager.exe
