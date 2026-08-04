@@ -64,7 +64,7 @@ jobs:
           sha256sum dist/emby-user-manager-linux-amd64 \
             > dist/emby-user-manager-linux-amd64.sha256
       - name: Upload Linux executable
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: emby-user-manager-linux-amd64
           path: |
