@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-var ErrUserNotFound = errors.New("Emby user not found")
+var ErrUserNotFound = errors.New("emby user not found")
 
 type Client interface {
 	CreateUser(ctx context.Context, username, password string) (User, error)
@@ -148,7 +148,7 @@ func (c *HTTPClient) AuthenticateUser(ctx context.Context, username, password st
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return User{}, fmt.Errorf("Emby authentication returned HTTP %d", response.StatusCode)
+		return User{}, fmt.Errorf("emby authentication returned HTTP %d", response.StatusCode)
 	}
 	var payload struct {
 		User User `json:"User"`
@@ -157,7 +157,7 @@ func (c *HTTPClient) AuthenticateUser(ctx context.Context, username, password st
 		return User{}, fmt.Errorf("decode Emby authentication response: %w", err)
 	}
 	if payload.User.ID == "" {
-		return User{}, fmt.Errorf("Emby authentication response has no user ID")
+		return User{}, fmt.Errorf("emby authentication response has no user ID")
 	}
 	return payload.User, nil
 }
@@ -178,14 +178,14 @@ func (c *HTTPClient) CreateUser(ctx context.Context, username, password string) 
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return User{}, fmt.Errorf("Emby user creation returned HTTP %d", response.StatusCode)
+		return User{}, fmt.Errorf("emby user creation returned HTTP %d", response.StatusCode)
 	}
 	var user User
 	if err := json.NewDecoder(response.Body).Decode(&user); err != nil {
 		return User{}, fmt.Errorf("decode Emby user creation response: %w", err)
 	}
 	if user.ID == "" {
-		return User{}, fmt.Errorf("Emby user creation response has no user ID")
+		return User{}, fmt.Errorf("emby user creation response has no user ID")
 	}
 	if err := c.SetUserPassword(ctx, user.ID, password); err != nil {
 		_ = c.DeleteUser(ctx, user.ID)
@@ -235,7 +235,7 @@ func (c *HTTPClient) DeleteUser(ctx context.Context, userID string) error {
 		if err == nil && missing {
 			return ErrUserNotFound
 		}
-		return fmt.Errorf("Emby user deletion returned HTTP %d", response.StatusCode)
+		return fmt.Errorf("emby user deletion returned HTTP %d", response.StatusCode)
 	}
 	return nil
 }
@@ -286,7 +286,7 @@ func (c *HTTPClient) updateUserPolicy(ctx context.Context, userID string, update
 		return fmt.Errorf("decode Emby user policy: %w", err)
 	}
 	if user.Policy == nil {
-		return fmt.Errorf("Emby user response has no policy")
+		return fmt.Errorf("emby user response has no policy")
 	}
 	update(user.Policy)
 	policy := user.Policy

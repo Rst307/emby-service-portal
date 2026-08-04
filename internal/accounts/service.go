@@ -253,7 +253,7 @@ func (s *Service) provisionAccountCreate(ctx context.Context, operation sqlite.A
 			}
 		}
 		if user.ID == "" {
-			return sqlite.Account{}, fmt.Errorf("Emby user creation returned no user ID")
+			return sqlite.Account{}, fmt.Errorf("emby user creation returned no user ID")
 		}
 		if foundByLookup {
 			if setter, ok := s.emby.(emby.PasswordSetter); ok {
@@ -322,7 +322,7 @@ func (s *Service) SyncFromEmby(ctx context.Context, input SyncInput) (int, error
 	}
 	lister, ok := s.emby.(emby.UserLister)
 	if !ok {
-		return 0, errors.New("Emby client does not support user listing")
+		return 0, errors.New("emby client does not support user listing")
 	}
 	users, err := lister.ListUsers(ctx)
 	if err != nil {
@@ -376,7 +376,7 @@ func (s *Service) SyncFromEmby(ctx context.Context, input SyncInput) (int, error
 func (s *Service) RestrictAllMediaFeatures(ctx context.Context) (int, error) {
 	restrict, ok := s.emby.(emby.PolicyRestricter)
 	if !ok {
-		return 0, errors.New("Emby client does not support policy restrictions")
+		return 0, errors.New("emby client does not support policy restrictions")
 	}
 	list, err := s.store.ListAccounts(ctx)
 	if err != nil {
