@@ -717,6 +717,39 @@ func (s *Store) UpdateAccount(ctx context.Context, account Account) (Account, er
 	return account, nil
 }
 
+// UpdateAccountAndExpire atomically updates mutable fields, marks an active
+// account expired, removes its sessions, and queues the Emby access policy.
+func (s *Store) UpdateAccountAndExpire(ctx context.Context, account Account, disabledAt, now time.Time) (Account, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Account{}, err
+	}
+	defer tx.Rollback()
+	result, err := tx.ExecContext(ctx, `UPDATE accounts SET expires_at = ?, note = ?, status = 'expired', disabled_at = ?, updated_at = ?, version = version + 1 WHERE id = ? AND version = ? AND status = 'active'`, timestamp(account.ExpiresAt), account.Note, timestamp(disabledAt), timestamp(now), account.ID, account.Version)
+	if err != nil {
+		return Account{}, err
+	}
+	if changed, err := result.RowsAffected(); err != nil {
+		return Account{}, err
+	} else if changed == 0 {
+		return Account{}, ErrAccountVersionConflict
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM user_sessions WHERE account_id = ?`, account.ID); err != nil {
+		return Account{}, err
+	}
+	if err := upsertAccessSyncJob(ctx, tx, account.ID, true, now); err != nil {
+		return Account{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return Account{}, err
+	}
+	account.Status = "expired"
+	account.DisabledAt = &disabledAt
+	account.UpdatedAt = now.UTC()
+	account.Version++
+	return account, nil
+}
+
 // SetAccountStatus atomically changes an account lifecycle state and queues
 // its desired Emby policy. The supplied account is the compare-and-swap token.
 func (s *Store) SetAccountStatus(ctx context.Context, account Account, status string, disabledAt *time.Time, now time.Time) (Account, error) {

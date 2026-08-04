@@ -53,6 +53,24 @@ type SyncInput struct {
 	Note      string
 }
 
+type BatchAction string
+
+const (
+	BatchSetExpiry BatchAction = "set_expiry"
+	BatchExtend    BatchAction = "extend"
+	BatchReduce    BatchAction = "reduce"
+	BatchEnable    BatchAction = "enable"
+	BatchDisable   BatchAction = "disable"
+)
+
+type BatchInput struct {
+	AccountIDs []int64
+	Versions   map[int64]int64
+	Action     BatchAction
+	ExpiresAt  time.Time
+	Duration   time.Duration
+}
+
 func New(store *sqlite.Store, embyClient emby.Client, vault *credentials.Vault) *Service {
 	return &Service{store: store, emby: embyClient, vault: vault, now: time.Now}
 }
@@ -411,6 +429,80 @@ func (s *Service) Get(ctx context.Context, id int64) (sqlite.Account, error) {
 	}
 	return account, err
 }
+
+// Batch applies the same management operation to every selected account. It
+// validates the complete selection before changing any account; a later
+// persistence failure can still leave already-applied operations intact.
+func (s *Service) Batch(ctx context.Context, input BatchInput) (int, error) {
+	ids, err := uniqueAccountIDs(input.AccountIDs)
+	if err != nil {
+		return 0, err
+	}
+	if input.Action != BatchSetExpiry && input.Action != BatchExtend && input.Action != BatchReduce && input.Action != BatchEnable && input.Action != BatchDisable {
+		return 0, errors.New("invalid batch action")
+	}
+	if (input.Action == BatchSetExpiry && input.ExpiresAt.IsZero()) || ((input.Action == BatchExtend || input.Action == BatchReduce) && input.Duration <= 0) {
+		return 0, errors.New("invalid batch expiry value")
+	}
+
+	accounts := make([]sqlite.Account, 0, len(ids))
+	for _, id := range ids {
+		account, err := s.Get(ctx, id)
+		if err != nil {
+			return 0, err
+		}
+		if expected := input.Versions[id]; expected != 0 && expected != account.Version {
+			return 0, ErrConflict
+		}
+		accounts = append(accounts, account)
+	}
+	now := s.now()
+	if input.Action == BatchEnable {
+		for _, account := range accounts {
+			if !account.ExpiresAt.After(now) {
+				return 0, ErrExpiredAccount
+			}
+		}
+	}
+	for completed, account := range accounts {
+		var err error
+		switch input.Action {
+		case BatchSetExpiry:
+			_, err = s.Update(ctx, account.ID, UpdateInput{ExpiresAt: input.ExpiresAt, Note: account.Note, Version: account.Version})
+		case BatchExtend:
+			_, err = s.Update(ctx, account.ID, UpdateInput{ExpiresAt: account.ExpiresAt.Add(input.Duration), Note: account.Note, Version: account.Version})
+		case BatchReduce:
+			_, err = s.Update(ctx, account.ID, UpdateInput{ExpiresAt: account.ExpiresAt.Add(-input.Duration), Note: account.Note, Version: account.Version})
+		case BatchEnable:
+			err = s.Enable(ctx, account.ID, account.Version)
+		case BatchDisable:
+			err = s.Disable(ctx, account.ID, account.Version)
+		}
+		if err != nil {
+			return completed, fmt.Errorf("batch operation stopped: %w", err)
+		}
+	}
+	return len(accounts), nil
+}
+
+func uniqueAccountIDs(ids []int64) ([]int64, error) {
+	if len(ids) == 0 {
+		return nil, errors.New("select at least one account")
+	}
+	unique := make(map[int64]struct{}, len(ids))
+	result := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		if id < 1 {
+			return nil, errors.New("invalid account ID")
+		}
+		if _, exists := unique[id]; !exists {
+			unique[id] = struct{}{}
+			result = append(result, id)
+		}
+	}
+	return result, nil
+}
+
 func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) (sqlite.Account, error) {
 	account, err := s.Get(ctx, id)
 	if err != nil {
@@ -426,15 +518,12 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) (sqli
 	account.Note = strings.TrimSpace(input.Note)
 	now := s.now().UTC()
 	account.UpdatedAt = now
+	if account.Status == "active" && !account.ExpiresAt.After(now) {
+		return s.store.UpdateAccountAndExpire(ctx, account, now, now)
+	}
 	account, err = s.store.UpdateAccount(ctx, account)
 	if err != nil {
 		return sqlite.Account{}, err
-	}
-	if account.Status == "active" && !account.ExpiresAt.After(now) {
-		account, err = s.store.SetAccountStatus(ctx, account, "expired", &now, now)
-		if err != nil {
-			return sqlite.Account{}, err
-		}
 	}
 	return account, nil
 }

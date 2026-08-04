@@ -2,6 +2,7 @@ package accounts
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 	"time"
@@ -124,6 +125,77 @@ func TestIdempotentCreateResumesAfterLocalFinalizationFailure(t *testing.T) {
 	}
 	if replayed.ID != account.ID || client.createCalls != 1 {
 		t.Fatalf("replay = %#v, create calls = %d; want original account and one create", replayed, client.createCalls)
+	}
+}
+
+func TestUpdateToPastExpiresAccountAndQueuesPolicyInOneVersion(t *testing.T) {
+	ctx := context.Background()
+	store, err := sqlite.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	now := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
+	account, err := store.CreateAccount(ctx, sqlite.Account{EmbyUserID: "u1", Username: "alice", Status: "active", ExpiresAt: now.Add(time.Hour), CreatedAt: now, UpdatedAt: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := New(store, &countingEmby{}, credentials.New("test-key"))
+	service.now = func() time.Time { return now }
+
+	updated, err := service.Update(ctx, account.ID, UpdateInput{ExpiresAt: now.Add(-time.Minute), Version: account.Version})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Status != "expired" || updated.Version != account.Version+1 {
+		t.Fatalf("updated account = %#v, want expired with one version increment", updated)
+	}
+	jobs, err := store.ListAccessSyncJobs(ctx, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(jobs) != 1 || !jobs[0].DesiredDisabled {
+		t.Fatalf("access sync jobs = %#v, want one disable", jobs)
+	}
+}
+
+func TestBatchRelativeExpiryDoesNotOverwriteConcurrentUpdate(t *testing.T) {
+	ctx := context.Background()
+	store, err := sqlite.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	base := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
+	account, err := store.CreateAccount(ctx, sqlite.Account{EmbyUserID: "u1", Username: "alice", Status: "active", ExpiresAt: base.Add(24 * time.Hour), CreatedAt: base, UpdatedAt: base})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := New(store, &countingEmby{}, credentials.New("test-key"))
+	updatedConcurrently := false
+	service.now = func() time.Time {
+		if !updatedConcurrently {
+			updatedConcurrently = true
+			concurrent := account
+			concurrent.ExpiresAt = base.Add(72 * time.Hour)
+			concurrent.UpdatedAt = base.Add(time.Minute)
+			if _, err := store.UpdateAccount(ctx, concurrent); err != nil {
+				t.Fatalf("concurrent update: %v", err)
+			}
+		}
+		return base
+	}
+
+	completed, err := service.Batch(ctx, BatchInput{AccountIDs: []int64{account.ID}, Action: BatchExtend, Duration: 24 * time.Hour})
+	if completed != 0 || !errors.Is(err, ErrConflict) {
+		t.Fatalf("Batch() = (%d, %v), want (0, conflict)", completed, err)
+	}
+	persisted, err := store.FindAccount(ctx, account.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !persisted.ExpiresAt.Equal(base.Add(72 * time.Hour)) {
+		t.Fatalf("expiry = %s, concurrent update was overwritten", persisted.ExpiresAt)
 	}
 }
 

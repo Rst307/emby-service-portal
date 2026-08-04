@@ -56,6 +56,7 @@ go run ./cmd/emby-user-manager
 | `EUM_ADMIN_PASSWORD` | 是 | 首次启动时创建的管理员密码；不会覆盖已有管理员。 |
 | `EUM_COOKIE_SECURE` | 否 | HTTPS 生产环境设为 `true`；仅可信局域网的直接 HTTP 可设为 `false`。 |
 | `EUM_SESSION_TTL` | 否 | 会话有效期，默认 `24h`。 |
+| `EUM_TIME_ZONE` | 否 | 网页显示时间及后台时间输入使用的 IANA 时区，默认 `UTC`。例如上海时间填写 `Asia/Shanghai`。数据库和 API 仍以 UTC/RFC3339 保存和返回。 |
 
 生成随机密钥：
 

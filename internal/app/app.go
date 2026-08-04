@@ -46,7 +46,11 @@ func New(ctx context.Context, cfg config.Config) (*Application, error) {
 	accountService := accounts.New(store, embyClient, credentials.New(cfg.CredentialMasterKey, cfg.CredentialPreviousKey, cfg.APIKey))
 	inviteService := invites.New(store, accountService)
 	portalService := portal.New(store, embyClient, cfg.SessionTTL)
-	webServer, err := web.New(authService, portalService, accountService, inviteService, cfg.APIKey, cfg.CookieSecure, cfg.SessionTTL)
+	timeLocation, err := cfg.TimeLocation()
+	if err != nil {
+		return closeOnError(err)
+	}
+	webServer, err := web.New(authService, portalService, accountService, inviteService, cfg.APIKey, cfg.CookieSecure, cfg.SessionTTL, timeLocation)
 	if err != nil {
 		return closeOnError(fmt.Errorf("configure web server: %w", err))
 	}

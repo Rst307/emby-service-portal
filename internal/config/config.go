@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	_ "time/tzdata"
 )
 
 type Config struct {
@@ -23,6 +24,7 @@ type Config struct {
 	AdminPassword         string
 	CookieSecure          bool
 	SessionTTL            time.Duration
+	TimeZone              string
 }
 
 func FromEnv() (Config, error) {
@@ -46,6 +48,7 @@ func FromEnv() (Config, error) {
 		AdminPassword:         os.Getenv("EUM_ADMIN_PASSWORD"),
 		CookieSecure:          cookieSecure,
 		SessionTTL:            ttl,
+		TimeZone:              value("EUM_TIME_ZONE", "UTC"),
 	}
 	return cfg, cfg.Validate()
 }
@@ -73,7 +76,24 @@ func (c Config) Validate() error {
 	if c.SessionTTL <= 0 {
 		return fmt.Errorf("EUM_SESSION_TTL must be positive")
 	}
+	if _, err := c.TimeLocation(); err != nil {
+		return err
+	}
 	return nil
+}
+
+// TimeLocation returns the configured IANA time zone. An empty value retains
+// the historical UTC behavior for programmatic configuration.
+func (c Config) TimeLocation() (*time.Location, error) {
+	name := strings.TrimSpace(c.TimeZone)
+	if name == "" {
+		name = "UTC"
+	}
+	location, err := time.LoadLocation(name)
+	if err != nil {
+		return nil, fmt.Errorf("EUM_TIME_ZONE must be a valid IANA time zone: %w", err)
+	}
+	return location, nil
 }
 
 func isLocalHost(host string) bool {

@@ -107,6 +107,35 @@ func TestAdminLoginRateLimitsRepeatedAttempts(t *testing.T) {
 	_ = body(t, response)
 }
 
+func TestAdminAccountTimeUsesConfiguredTimeZone(t *testing.T) {
+	application := testApplicationWithTimeZone(t, "Asia/Shanghai")
+	defer application.Close()
+	server := httptest.NewServer(application.Handler())
+	defer server.Close()
+	jar, _ := cookiejar.New(nil)
+	client := &http.Client{Jar: jar, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
+	login(t, client, server.URL)
+
+	response := get(t, client, server.URL+"/admin/accounts")
+	response = postForm(t, client, server.URL+"/admin/accounts", url.Values{"username": {"shanghai-account"}, "password": {"password123"}, "expires_at": {"2030-01-01T00:00"}, "csrf_token": {csrf(t, body(t, response))}})
+	if response.StatusCode != http.StatusSeeOther {
+		t.Fatalf("create account status = %d: %s", response.StatusCode, body(t, response))
+	}
+
+	request, err := http.NewRequest(http.MethodGet, server.URL+"/api/v1/accounts", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("X-API-Key", "integration-key")
+	response, err = http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK || !strings.Contains(body(t, response), "2029-12-31T16:00:00Z") {
+		t.Fatal("configured Shanghai time was not converted to UTC for storage")
+	}
+}
+
 func TestAdminAccountTimeIsAlwaysInterpretedAsUTC(t *testing.T) {
 	originalLocation := time.Local
 	time.Local = time.FixedZone("UTC+8", 8*60*60)
@@ -129,6 +158,99 @@ func TestAdminAccountTimeIsAlwaysInterpretedAsUTC(t *testing.T) {
 	response = get(t, client, server.URL+"/admin/accounts")
 	if page := body(t, response); !strings.Contains(page, "2030-01-01 00:00") {
 		t.Fatalf("UTC expiry was changed by server local timezone: %s", page)
+	}
+}
+
+func TestBatchAccountExpiryManagement(t *testing.T) {
+	application := testApplication(t)
+	defer application.Close()
+	server := httptest.NewServer(application.Handler())
+	defer server.Close()
+	jar, _ := cookiejar.New(nil)
+	client := &http.Client{Jar: jar, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
+	login(t, client, server.URL)
+
+	response := get(t, client, server.URL+"/admin/accounts")
+	response = postForm(t, client, server.URL+"/admin/accounts", url.Values{"username": {"batch-user"}, "password": {"password123"}, "expires_at": {"2030-01-01T00:00"}, "csrf_token": {csrf(t, body(t, response))}})
+	if response.StatusCode != http.StatusSeeOther {
+		t.Fatalf("create account status = %d", response.StatusCode)
+	}
+
+	response = get(t, client, server.URL+"/admin/accounts")
+	page := body(t, response)
+	if !strings.Contains(page, "account-batch") || !strings.Contains(page, "batch-select") {
+		t.Fatalf("batch controls absent: %s", page)
+	}
+	response = postForm(t, client, server.URL+"/admin/accounts/batch", url.Values{"account_id": {"1:1"}, "action": {"extend"}, "duration": {"2"}, "duration_unit": {"day"}, "csrf_token": {csrf(t, page)}})
+	if response.StatusCode != http.StatusSeeOther {
+		t.Fatalf("batch update failed: status = %d", response.StatusCode)
+	}
+	response = get(t, client, server.URL+response.Header.Get("Location"))
+	if !strings.Contains(body(t, response), "已完成 1 个账号的批量操作") {
+		t.Fatal("batch success notice is absent")
+	}
+
+	request, err := http.NewRequest(http.MethodGet, server.URL+"/api/v1/accounts", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("X-API-Key", "integration-key")
+	response, err = http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK || !strings.Contains(body(t, response), "2030-01-03T00:00:00Z") {
+		t.Fatal("batch extension was not persisted")
+	}
+}
+
+func TestBatchRejectsStalePageAfterConcurrentRenewal(t *testing.T) {
+	application := testApplication(t)
+	defer application.Close()
+	server := httptest.NewServer(application.Handler())
+	defer server.Close()
+	jar, _ := cookiejar.New(nil)
+	client := &http.Client{Jar: jar, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
+	login(t, client, server.URL)
+
+	response := get(t, client, server.URL+"/admin/accounts")
+	response = postForm(t, client, server.URL+"/admin/accounts", url.Values{"username": {"stale-batch-user"}, "password": {"password123"}, "expires_at": {"2030-01-01T00:00"}, "csrf_token": {csrf(t, body(t, response))}})
+	if response.StatusCode != http.StatusSeeOther {
+		t.Fatalf("create account status = %d", response.StatusCode)
+	}
+	response = get(t, client, server.URL+"/admin/accounts")
+	stalePage := body(t, response)
+
+	request, err := http.NewRequest(http.MethodPatch, server.URL+"/api/v1/accounts/1", strings.NewReader(`{"expires_at":"2030-02-01T00:00:00Z","note":"renewed","version":1}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-API-Key", "integration-key")
+	response, err = http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("concurrent API update status = %d: %s", response.StatusCode, body(t, response))
+	}
+
+	response = postForm(t, client, server.URL+"/admin/accounts/batch", url.Values{"account_id": {"1:1"}, "action": {"set_expiry"}, "expires_at": {"2030-01-15T00:00"}, "csrf_token": {csrf(t, stalePage)}})
+	if response.StatusCode != http.StatusBadRequest || !strings.Contains(body(t, response), "批量操作失败") {
+		t.Fatalf("stale batch status = %d, want rejected batch", response.StatusCode)
+	}
+
+	request, err = http.NewRequest(http.MethodGet, server.URL+"/api/v1/accounts", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("X-API-Key", "integration-key")
+	response, err = http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(body(t, response), "2030-02-01T00:00:00Z") {
+		t.Fatal("stale batch overwrote the concurrent renewal")
 	}
 }
 
@@ -460,6 +582,10 @@ func TestHealthEndpoints(t *testing.T) {
 }
 
 func testApplication(t *testing.T) *app.Application {
+	return testApplicationWithTimeZone(t, "UTC")
+}
+
+func testApplicationWithTimeZone(t *testing.T, timeZone string) *app.Application {
 	t.Helper()
 	emby := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -498,7 +624,7 @@ func testApplication(t *testing.T) *app.Application {
 		EmbyBaseURL: emby.URL + "/emby", EmbyAPIKey: "test-key", APIKey: "integration-key",
 		CredentialMasterKey: "test-credential-master-key-that-is-long-enough",
 		AdminUsername:       "admin", AdminPassword: "correct horse battery staple",
-		CookieSecure: false, SessionTTL: time.Hour,
+		CookieSecure: false, SessionTTL: time.Hour, TimeZone: timeZone,
 	})
 	if err != nil {
 		t.Fatalf("create application: %v", err)

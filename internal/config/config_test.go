@@ -30,6 +30,26 @@ func TestValidateAllowsLoopbackHTTPForDevelopment(t *testing.T) {
 	}
 }
 
+func TestValidateAcceptsIanaTimeZone(t *testing.T) {
+	cfg := validConfig()
+	cfg.TimeZone = "Asia/Shanghai"
+	location, err := cfg.TimeLocation()
+	if err != nil {
+		t.Fatalf("TimeLocation() error = %v", err)
+	}
+	if location.String() != "Asia/Shanghai" {
+		t.Fatalf("location = %q, want Asia/Shanghai", location)
+	}
+}
+
+func TestValidateRejectsInvalidTimeZone(t *testing.T) {
+	cfg := validConfig()
+	cfg.TimeZone = "not/a-time-zone"
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "EUM_TIME_ZONE") {
+		t.Fatalf("Validate() error = %v, want time-zone error", err)
+	}
+}
+
 func TestValidateRequiresSeparateCredentialMasterKey(t *testing.T) {
 	cfg := validConfig()
 	cfg.CredentialMasterKey = ""

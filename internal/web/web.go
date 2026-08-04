@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -38,18 +39,22 @@ type Server struct {
 	templates    *admin.Templates
 	cookieSecure bool
 	sessionTTL   time.Duration
+	timeLocation *time.Location
 	loginLimit   *ratelimit.Limiter
 	publicLimit  *ratelimit.Limiter
 }
 
-func New(authService *auth.Service, portalService *portal.Service, accountService *accounts.Service, inviteService *invites.Service, apiKey string, cookieSecure bool, sessionTTL time.Duration) (*Server, error) {
-	templates, err := admin.NewTemplates()
+func New(authService *auth.Service, portalService *portal.Service, accountService *accounts.Service, inviteService *invites.Service, apiKey string, cookieSecure bool, sessionTTL time.Duration, timeLocation *time.Location) (*Server, error) {
+	if timeLocation == nil {
+		timeLocation = time.UTC
+	}
+	templates, err := admin.NewTemplates(timeLocation)
 	if err != nil {
 		return nil, err
 	}
 	return &Server{
 		auth: authService, portal: portalService, accounts: accountService, invites: inviteService,
-		apiKey: apiKey, templates: templates, cookieSecure: cookieSecure, sessionTTL: sessionTTL,
+		apiKey: apiKey, templates: templates, cookieSecure: cookieSecure, sessionTTL: sessionTTL, timeLocation: timeLocation,
 		loginLimit: ratelimit.New(10, time.Minute), publicLimit: ratelimit.New(20, time.Minute),
 	}, nil
 }
@@ -81,6 +86,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /admin/accounts", s.accountCreate)
 	mux.HandleFunc("POST /admin/accounts/sync", s.accountSync)
 	mux.HandleFunc("POST /admin/accounts/{id}/update", s.accountUpdate)
+	mux.HandleFunc("POST /admin/accounts/batch", s.accountBatch)
 	mux.HandleFunc("POST /admin/accounts/{id}/enable", s.accountEnable)
 	mux.HandleFunc("POST /admin/accounts/{id}/disable", s.accountDisable)
 	mux.HandleFunc("POST /admin/accounts/{id}/delete", s.accountDelete)
@@ -448,6 +454,17 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
 }
+func (s *Server) parseDateTime(value string) (time.Time, error) {
+	return time.ParseInLocation("2006-01-02T15:04", value, s.timeLocation)
+}
+
+func (s *Server) parseAccountDateTime(value, original string) (time.Time, error) {
+	if originalTime, err := time.Parse(time.RFC3339Nano, original); err == nil && originalTime.In(s.timeLocation).Format("2006-01-02T15:04") == value {
+		return originalTime, nil
+	}
+	return s.parseDateTime(value)
+}
+
 func accountID(r *http.Request) (int64, error) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil || id < 1 {
@@ -478,8 +495,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	token, err := s.auth.Login(r.Context(), r.Form.Get("username"), r.Form.Get("password"))
 	if err != nil {
 		if err == auth.ErrInvalidCredentials {
-			w.WriteHeader(http.StatusUnauthorized)
-			s.templates.Render(w, "login", admin.ViewData{CSRFToken: csrfFromRequest(r), Error: "用户名或密码错误"})
+			s.templates.RenderStatus(w, "login", admin.ViewData{CSRFToken: csrfFromRequest(r), Error: "用户名或密码错误"}, http.StatusUnauthorized)
 			return
 		}
 		http.Error(w, "login unavailable", http.StatusInternalServerError)
@@ -505,8 +521,7 @@ func (s *Server) portalLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	token, err := s.portal.Login(r.Context(), r.Form.Get("username"), r.Form.Get("password"))
 	if err != nil {
-		w.WriteHeader(http.StatusUnauthorized)
-		s.templates.Render(w, "portal-login", admin.ViewData{CSRFToken: csrfFromRequest(r), Error: "用户名或密码错误，或该账号不可使用用户中心"})
+		s.templates.RenderStatus(w, "portal-login", admin.ViewData{CSRFToken: csrfFromRequest(r), Error: "用户名或密码错误，或该账号不可使用用户中心"}, http.StatusUnauthorized)
 		return
 	}
 	http.SetCookie(w, &http.Cookie{Name: userSessionCookie, Value: token, Path: "/", HttpOnly: true, Secure: s.cookieSecure, SameSite: http.SameSiteLaxMode, MaxAge: int(s.sessionTTL.Seconds())})
@@ -548,7 +563,7 @@ func (s *Server) accountList(w http.ResponseWriter, r *http.Request) {
 	if !s.requireAdmin(w, r) {
 		return
 	}
-	s.renderAccounts(w, r, http.StatusOK, "")
+	s.renderAccounts(w, r, http.StatusOK, "", r.URL.Query().Get("message"))
 }
 func (s *Server) accountCreate(w http.ResponseWriter, r *http.Request) {
 	if !s.requireAdmin(w, r) {
@@ -558,12 +573,12 @@ func (s *Server) accountCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid CSRF token", http.StatusForbidden)
 		return
 	}
-	expiresAt, err := time.ParseInLocation("2006-01-02T15:04", r.Form.Get("expires_at"), time.UTC)
+	expiresAt, err := s.parseDateTime(r.Form.Get("expires_at"))
 	if err == nil {
 		_, err = s.accounts.Create(r.Context(), accounts.CreateInput{Username: r.Form.Get("username"), Password: r.Form.Get("password"), ExpiresAt: expiresAt, Note: r.Form.Get("note")})
 	}
 	if err != nil {
-		s.renderAccounts(w, r, http.StatusBadRequest, accountError(err))
+		s.renderAccounts(w, r, http.StatusBadRequest, accountError(err), "")
 		return
 	}
 	http.Redirect(w, r, "/admin/accounts", http.StatusSeeOther)
@@ -576,12 +591,12 @@ func (s *Server) accountSync(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid CSRF token", http.StatusForbidden)
 		return
 	}
-	expiresAt, err := time.ParseInLocation("2006-01-02T15:04", r.Form.Get("expires_at"), time.UTC)
+	expiresAt, err := s.parseDateTime(r.Form.Get("expires_at"))
 	if err == nil {
 		_, err = s.accounts.SyncFromEmby(r.Context(), accounts.SyncInput{ExpiresAt: expiresAt, Note: r.Form.Get("note")})
 	}
 	if err != nil {
-		s.renderAccounts(w, r, http.StatusBadRequest, "同步失败：请检查 Emby 连接和到期时间")
+		s.renderAccounts(w, r, http.StatusBadRequest, "同步失败：请检查 Emby 连接和到期时间", "")
 		return
 	}
 	http.Redirect(w, r, "/admin/accounts", http.StatusSeeOther)
@@ -595,7 +610,7 @@ func (s *Server) accountUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	expiresAt, parseErr := time.ParseInLocation("2006-01-02T15:04", r.Form.Get("expires_at"), time.UTC)
+	expiresAt, parseErr := s.parseAccountDateTime(r.Form.Get("expires_at"), r.Form.Get("expires_at_original"))
 	if err == nil && id > 0 && parseErr == nil {
 		version, versionErr := accountVersion(r)
 		if versionErr != nil {
@@ -607,11 +622,79 @@ func (s *Server) accountUpdate(w http.ResponseWriter, r *http.Request) {
 		err = parseErr
 	}
 	if err != nil {
-		s.renderAccounts(w, r, http.StatusBadRequest, accountError(err))
+		s.renderAccounts(w, r, http.StatusBadRequest, accountError(err), "")
 		return
 	}
 	http.Redirect(w, r, "/admin/accounts", http.StatusSeeOther)
 }
+func (s *Server) accountBatch(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdmin(w, r) {
+		return
+	}
+	if !validCSRF(r) {
+		http.Error(w, "invalid CSRF token", http.StatusForbidden)
+		return
+	}
+	ids, versions, err := accountSelections(r.Form["account_id"])
+	input := accounts.BatchInput{AccountIDs: ids, Versions: versions, Action: accounts.BatchAction(r.Form.Get("action"))}
+	if err == nil {
+		switch input.Action {
+		case accounts.BatchSetExpiry:
+			input.ExpiresAt, err = s.parseDateTime(r.Form.Get("expires_at"))
+		case accounts.BatchExtend, accounts.BatchReduce:
+			input.Duration, err = batchDuration(r.Form.Get("duration"), r.Form.Get("duration_unit"))
+		}
+	}
+	completed := 0
+	if err == nil {
+		completed, err = s.accounts.Batch(r.Context(), input)
+	}
+	if err != nil {
+		message := "批量操作失败，请检查所选账号和输入后重试"
+		if completed > 0 {
+			message = fmt.Sprintf("批量操作中断，已完成 %d 个账号；请刷新后检查其余账号", completed)
+		}
+		s.renderAccounts(w, r, http.StatusBadRequest, message, "")
+		return
+	}
+	http.Redirect(w, r, "/admin/accounts?message="+url.QueryEscape(fmt.Sprintf("已完成 %d 个账号的批量操作", completed)), http.StatusSeeOther)
+}
+
+func accountSelections(values []string) ([]int64, map[int64]int64, error) {
+	ids := make([]int64, 0, len(values))
+	versions := make(map[int64]int64, len(values))
+	for _, value := range values {
+		parts := strings.Split(value, ":")
+		if len(parts) != 2 {
+			return nil, nil, errors.New("invalid account selection")
+		}
+		id, idErr := strconv.ParseInt(parts[0], 10, 64)
+		version, versionErr := strconv.ParseInt(parts[1], 10, 64)
+		if idErr != nil || versionErr != nil || id < 1 || version < 1 {
+			return nil, nil, errors.New("invalid account selection")
+		}
+		if _, duplicate := versions[id]; duplicate {
+			continue
+		}
+		ids = append(ids, id)
+		versions[id] = version
+	}
+	return ids, versions, nil
+}
+
+func batchDuration(raw, unit string) (time.Duration, error) {
+	amount, err := strconv.Atoi(raw)
+	if err != nil || amount < 1 || amount > 36500 {
+		return 0, errors.New("invalid batch duration")
+	}
+	multipliers := map[string]time.Duration{"minute": time.Minute, "hour": time.Hour, "day": 24 * time.Hour}
+	multiplier, ok := multipliers[unit]
+	if !ok {
+		return 0, errors.New("invalid batch duration unit")
+	}
+	return time.Duration(amount) * multiplier, nil
+}
+
 func (s *Server) accountEnable(w http.ResponseWriter, r *http.Request) {
 	s.accountAction(w, r, func(id, version int64) error { return s.accounts.Enable(r.Context(), id, version) })
 }
@@ -628,12 +711,12 @@ func (s *Server) accountDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := accountID(r)
 	if err != nil {
-		s.renderAccounts(w, r, http.StatusBadRequest, accountError(err))
+		s.renderAccounts(w, r, http.StatusBadRequest, accountError(err), "")
 		return
 	}
 	account, err := s.accounts.Get(r.Context(), id)
 	if err != nil {
-		s.renderAccounts(w, r, http.StatusBadRequest, accountError(err))
+		s.renderAccounts(w, r, http.StatusBadRequest, accountError(err), "")
 		return
 	}
 	s.templates.Render(w, "account-delete-confirm", admin.ViewData{CSRFToken: csrfFromRequest(r), Account: account})
@@ -659,7 +742,7 @@ func (s *Server) accountAction(w http.ResponseWriter, r *http.Request, action fu
 		err = action(id, version)
 	}
 	if err != nil {
-		s.renderAccounts(w, r, http.StatusBadRequest, accountError(err))
+		s.renderAccounts(w, r, http.StatusBadRequest, accountError(err), "")
 		return
 	}
 	http.Redirect(w, r, "/admin/accounts", http.StatusSeeOther)
@@ -676,15 +759,13 @@ func accountVersion(r *http.Request) (int64, error) {
 	}
 	return version, nil
 }
-func (s *Server) renderAccounts(w http.ResponseWriter, r *http.Request, status int, message string) {
+func (s *Server) renderAccounts(w http.ResponseWriter, r *http.Request, status int, errorMessage, message string) {
 	list, err := s.accounts.List(r.Context())
 	if err != nil {
 		http.Error(w, "load accounts", http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(status)
-	s.templates.Render(w, "accounts", admin.ViewData{CSRFToken: csrfFromRequest(r), Error: message, Accounts: list})
+	s.templates.RenderStatus(w, "accounts", admin.ViewData{CSRFToken: csrfFromRequest(r), Error: errorMessage, Message: message, Accounts: list}, status)
 }
 func accountError(err error) string {
 	switch {
@@ -774,9 +855,7 @@ func (s *Server) renderInvites(w http.ResponseWriter, r *http.Request, status in
 		http.Error(w, "load invites", http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(status)
-	s.templates.Render(w, "invites", admin.ViewData{CSRFToken: csrfFromRequest(r), Error: errorMessage, Message: message, Invites: list})
+	s.templates.RenderStatus(w, "invites", admin.ViewData{CSRFToken: csrfFromRequest(r), Error: errorMessage, Message: message, Invites: list}, status)
 }
 func inviteError(err error) string {
 	if errors.Is(err, invites.ErrInvalidDuration) {
@@ -821,7 +900,7 @@ func (s *Server) renew(w http.ResponseWriter, r *http.Request) {
 		s.templates.Render(w, "renew", admin.ViewData{CSRFToken: csrfFromRequest(r), Error: "续费失败：邀请码不可用或账号不存在"})
 		return
 	}
-	s.templates.Render(w, "result", admin.ViewData{Message: "续费成功，新的到期时间：" + account.ExpiresAt.UTC().Format(time.RFC3339)})
+	s.templates.Render(w, "result", admin.ViewData{Message: "续费成功，新的到期时间：" + account.ExpiresAt.In(s.timeLocation).Format("2006-01-02 15:04") + " " + s.timeLocation.String()})
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
