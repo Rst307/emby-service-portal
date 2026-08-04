@@ -550,7 +550,7 @@ func TestAdminPagesLoadTheServedStylesheet(t *testing.T) {
 	}
 }
 
-func TestSensitivePagesDisableCachingWithoutDisablingStaticAssetCaching(t *testing.T) {
+func TestSensitivePagesAndStaticAssetsHaveSafeCaching(t *testing.T) {
 	application := testApplication(t)
 	defer application.Close()
 	server := httptest.NewServer(application.Handler())
@@ -562,11 +562,13 @@ func TestSensitivePagesDisableCachingWithoutDisablingStaticAssetCaching(t *testi
 	}
 	_ = body(t, response)
 
-	response = get(t, http.DefaultClient, server.URL+"/static/app.css")
-	if cacheControl := response.Header.Get("Cache-Control"); cacheControl != "public, max-age=3600" {
-		t.Fatalf("stylesheet Cache-Control = %q, want public cache", cacheControl)
+	for _, asset := range []string{"/static/app.css", "/static/app.js"} {
+		response = get(t, http.DefaultClient, server.URL+asset)
+		if cacheControl := response.Header.Get("Cache-Control"); cacheControl != "no-cache, must-revalidate" {
+			t.Fatalf("%s Cache-Control = %q, want revalidation", asset, cacheControl)
+		}
+		_ = body(t, response)
 	}
-	_ = body(t, response)
 }
 
 func TestHealthEndpoints(t *testing.T) {

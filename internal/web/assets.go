@@ -15,7 +15,7 @@ func (s *Server) script(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
-	w.Header().Set("Cache-Control", "public, max-age=3600")
+	w.Header().Set("Cache-Control", "no-cache, must-revalidate")
 	_, _ = w.Write(script)
 }
 
@@ -26,6 +26,6 @@ func (s *Server) stylesheet(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/css; charset=utf-8")
-	w.Header().Set("Cache-Control", "public, max-age=3600")
+	w.Header().Set("Cache-Control", "no-cache, must-revalidate")
 	_, _ = w.Write(css)
 }
