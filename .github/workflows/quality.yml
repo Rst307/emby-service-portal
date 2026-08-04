@@ -72,3 +72,30 @@ jobs:
             dist/emby-user-manager-linux-amd64.sha256
           if-no-files-found: error
           retention-days: 30
+
+  release-linux:
+    name: Publish Linux release
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
+    needs: build-linux
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download Linux executable
+        uses: actions/download-artifact@v8
+        with:
+          name: emby-user-manager-linux-amd64
+          path: dist
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: v0.0.0-build.${{ github.run_id }}
+        run: |
+          gh release create "$RELEASE_TAG" \
+            dist/emby-user-manager-linux-amd64 \
+            dist/emby-user-manager-linux-amd64.sha256 \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Emby User Manager $RELEASE_TAG" \
+            --prerelease \
+            --generate-notes
