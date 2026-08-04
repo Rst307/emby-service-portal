@@ -29,8 +29,16 @@ document.addEventListener("DOMContentLoaded", () => {
   const expiryField = form.querySelector("[data-batch-expiry]");
   const expiryInput = form.querySelector("input[name=expires_at]");
   const selectAll = document.querySelector("[data-batch-select-all]");
+  const statusFilter = form.querySelector("[data-batch-status-filter]");
+  const selectStatus = form.querySelector("[data-batch-select-status]");
+  const clearSelection = form.querySelector("[data-batch-clear]");
   const selection = form.querySelector("[data-batch-selection]");
+  const rows = () => [...document.querySelectorAll("[data-account-row]")];
   const selected = () => [...document.querySelectorAll(".batch-select")];
+  const visible = () => selected().filter((checkbox) => {
+    const row = checkbox.closest("[data-account-row]");
+    return !row.hidden;
+  });
 
   const updateOperationFields = () => {
     const isDuration = action.value === "extend" || action.value === "reduce";
@@ -40,21 +48,47 @@ document.addEventListener("DOMContentLoaded", () => {
     durationInput.required = isDuration;
     expiryInput.required = isExpiry;
   };
+  const updateVisibility = () => {
+    const filter = statusFilter ? statusFilter.value : "all";
+    rows().forEach((row) => {
+      row.hidden = filter !== "all" && row.dataset.accountStatus !== filter;
+    });
+  };
   const updateSelection = () => {
     const checkboxes = selected();
+    const visibleCheckboxes = visible();
     const count = checkboxes.filter((checkbox) => checkbox.checked).length;
+    const visibleCount = visibleCheckboxes.filter((checkbox) => checkbox.checked).length;
     selection.textContent = count ? `已选择 ${count} 个账号` : "尚未选择账号";
     if (selectAll) {
-      selectAll.checked = checkboxes.length > 0 && count === checkboxes.length;
-      selectAll.indeterminate = count > 0 && count < checkboxes.length;
+      selectAll.checked = visibleCheckboxes.length > 0 && visibleCount === visibleCheckboxes.length;
+      selectAll.indeterminate = visibleCount > 0 && visibleCount < visibleCheckboxes.length;
     }
   };
 
   action.addEventListener("change", updateOperationFields);
+  if (statusFilter) {
+    statusFilter.addEventListener("change", () => {
+      updateVisibility();
+      updateSelection();
+    });
+  }
   selected().forEach((checkbox) => checkbox.addEventListener("change", updateSelection));
   if (selectAll) {
     selectAll.addEventListener("change", () => {
-      selected().forEach((checkbox) => { checkbox.checked = selectAll.checked; });
+      visible().forEach((checkbox) => { checkbox.checked = selectAll.checked; });
+      updateSelection();
+    });
+  }
+  if (selectStatus) {
+    selectStatus.addEventListener("click", () => {
+      visible().forEach((checkbox) => { checkbox.checked = true; });
+      updateSelection();
+    });
+  }
+  if (clearSelection) {
+    clearSelection.addEventListener("click", () => {
+      selected().forEach((checkbox) => { checkbox.checked = false; });
       updateSelection();
     });
   }
@@ -68,5 +102,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!window.confirm(`确认对 ${count} 个账号执行此操作？`)) event.preventDefault();
   });
   updateOperationFields();
+  updateVisibility();
   updateSelection();
 });
