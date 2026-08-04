@@ -79,7 +79,9 @@ EUM_CREDENTIAL_PREVIOUS_MASTER_KEY=旧的主密钥
 
 ## Linux / systemd 部署
 
-构建静态 Linux amd64 二进制：
+每次代码推送到 `main` 后，GitHub Actions 会自动生成静态 Linux amd64 可执行文件。在仓库的 **Actions → quality → 对应运行记录 → Artifacts** 中下载 `emby-user-manager-linux-amd64`。压缩包同时包含可执行文件和 SHA-256 校验文件，构建产物保留 30 天；也可以在 Actions 页面通过 **Run workflow** 手动触发构建。
+
+本地构建静态 Linux amd64 二进制：
 
 ```bash
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
@@ -148,7 +150,7 @@ go vet ./...
 go test -race ./...
 ```
 
-GitHub Actions 会运行格式检查、依赖校验、测试、race 检测、覆盖率、`staticcheck`、`govulncheck` 与 Linux 构建。
+GitHub Actions 会运行格式检查、依赖校验、测试、race 检测、覆盖率、`staticcheck`、`govulncheck`，并上传可下载的 Linux amd64 构建产物。
 
 ## 项目结构
 

@@ -4,6 +4,7 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -39,9 +40,35 @@ jobs:
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
           govulncheck ./...
-      - name: Linux release build
-        env:
-          CGO_ENABLED: "0"
-          GOOS: linux
-          GOARCH: amd64
-        run: go build -trimpath -buildvcs=false -o /tmp/emby-user-manager ./cmd/emby-user-manager
+
+  build-linux:
+    name: Build Linux amd64
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: "0"
+      GOOS: linux
+      GOARCH: amd64
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build executable
+        run: |
+          mkdir -p dist
+          go build -trimpath -buildvcs=false -ldflags='-s -w' \
+            -o dist/emby-user-manager-linux-amd64 ./cmd/emby-user-manager
+          chmod 0755 dist/emby-user-manager-linux-amd64
+          sha256sum dist/emby-user-manager-linux-amd64 \
+            > dist/emby-user-manager-linux-amd64.sha256
+      - name: Upload Linux executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: emby-user-manager-linux-amd64
+          path: |
+            dist/emby-user-manager-linux-amd64
+            dist/emby-user-manager-linux-amd64.sha256
+          if-no-files-found: error
+          retention-days: 30
