@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -101,8 +102,10 @@ func TestAdminLoginRateLimitsRepeatedAttempts(t *testing.T) {
 	if response.StatusCode != http.StatusTooManyRequests {
 		t.Fatalf("rate-limited login status = %d, want 429", response.StatusCode)
 	}
-	if retryAfter := response.Header.Get("Retry-After"); retryAfter != "60" {
-		t.Fatalf("Retry-After = %q, want 60", retryAfter)
+	retryAfter := response.Header.Get("Retry-After")
+	retrySeconds, err := strconv.Atoi(retryAfter)
+	if err != nil || retrySeconds < 1 || retrySeconds > 60 {
+		t.Fatalf("Retry-After = %q, want remaining seconds in [1, 60]", retryAfter)
 	}
 	_ = body(t, response)
 }
