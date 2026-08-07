@@ -557,7 +557,24 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 	if !s.requireAdmin(w, r) {
 		return
 	}
-	s.templates.Render(w, "dashboard", admin.ViewData{CSRFToken: csrfFromRequest(r)})
+	data := admin.ViewData{CSRFToken: csrfFromRequest(r)}
+	if accounts, err := s.accounts.List(r.Context()); err == nil {
+		data.AccountCount = len(accounts)
+		for _, account := range accounts {
+			switch account.Status {
+			case "active":
+				data.ActiveCount++
+			case "disabled":
+				data.DisabledCount++
+			case "expired":
+				data.ExpiredCount++
+			}
+		}
+	}
+	if invites, err := s.invites.List(r.Context()); err == nil {
+		data.InviteCount = len(invites)
+	}
+	s.templates.Render(w, "dashboard", data)
 }
 func (s *Server) accountList(w http.ResponseWriter, r *http.Request) {
 	if !s.requireAdmin(w, r) {
@@ -788,7 +805,7 @@ func (s *Server) inviteList(w http.ResponseWriter, r *http.Request) {
 	if !s.requireAdmin(w, r) {
 		return
 	}
-	s.renderInvites(w, r, http.StatusOK, "", "")
+	s.renderInvites(w, r, http.StatusOK, "", "", "")
 }
 func (s *Server) inviteCreate(w http.ResponseWriter, r *http.Request) {
 	if !s.requireAdmin(w, r) {
@@ -807,10 +824,10 @@ func (s *Server) inviteCreate(w http.ResponseWriter, r *http.Request) {
 		err = invites.ErrInvalidDuration
 	}
 	if err != nil {
-		s.renderInvites(w, r, http.StatusBadRequest, inviteError(err), "")
+		s.renderInvites(w, r, http.StatusBadRequest, inviteError(err), "", "")
 		return
 	}
-	s.renderInvites(w, r, http.StatusCreated, "", created.Code)
+	s.renderInvites(w, r, http.StatusCreated, "", "", created.Code)
 }
 func (s *Server) inviteToggle(w http.ResponseWriter, r *http.Request) {
 	if !s.requireAdmin(w, r) {
@@ -826,7 +843,7 @@ func (s *Server) inviteToggle(w http.ResponseWriter, r *http.Request) {
 		err = s.invites.SetEnabled(r.Context(), id, enabled)
 	}
 	if err != nil {
-		s.renderInvites(w, r, http.StatusBadRequest, inviteError(err), "")
+		s.renderInvites(w, r, http.StatusBadRequest, inviteError(err), "", "")
 		return
 	}
 	http.Redirect(w, r, "/admin/invites", http.StatusSeeOther)
@@ -844,18 +861,18 @@ func (s *Server) inviteDelete(w http.ResponseWriter, r *http.Request) {
 		err = s.invites.Delete(r.Context(), id)
 	}
 	if err != nil {
-		s.renderInvites(w, r, http.StatusBadRequest, "邀请码已被使用时请改为禁用", "")
+		s.renderInvites(w, r, http.StatusBadRequest, "邀请码已被使用时请改为禁用", "", "")
 		return
 	}
 	http.Redirect(w, r, "/admin/invites", http.StatusSeeOther)
 }
-func (s *Server) renderInvites(w http.ResponseWriter, r *http.Request, status int, errorMessage, message string) {
+func (s *Server) renderInvites(w http.ResponseWriter, r *http.Request, status int, errorMessage, message, newCode string) {
 	list, err := s.invites.List(r.Context())
 	if err != nil {
 		http.Error(w, "load invites", http.StatusInternalServerError)
 		return
 	}
-	s.templates.RenderStatus(w, "invites", admin.ViewData{CSRFToken: csrfFromRequest(r), Error: errorMessage, Message: message, Invites: list}, status)
+	s.templates.RenderStatus(w, "invites", admin.ViewData{CSRFToken: csrfFromRequest(r), Error: errorMessage, Message: message, Invites: list, NewInviteCode: newCode}, status)
 }
 func inviteError(err error) string {
 	if errors.Is(err, invites.ErrInvalidDuration) {
@@ -1010,7 +1027,7 @@ func securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "same-origin")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:")
 		next.ServeHTTP(w, r)
 	})
 }

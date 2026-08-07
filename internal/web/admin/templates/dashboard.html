@@ -1,1 +1,55 @@
-{{define "dashboard"}}<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>控制台 · Emby 账号管理</title><link rel="stylesheet" href="/static/app.css"></head><body><main class="app-shell"><header class="topbar"><div class="brand"><span class="brand-mark">E</span>Emby 账号管理</div><nav class="nav-links"><a class="active" href="/admin/">控制台</a><a href="/admin/accounts">账号</a><a href="/admin/invites">邀请码</a></nav></header><section class="hero"><article class="panel hero-card"><p class="eyebrow">控制台</p><h1 class="page-title">管理你的 Emby 订阅</h1><p class="page-lead">创建用户、调整订阅到期日，并通过邀请码完成注册或续费。</p></article><aside class="panel hero-card"><h2>快捷入口</h2><div class="quick-links"><a class="quick-link" href="/admin/accounts">账号管理 <span>创建、启用、停用 →</span></a><a class="quick-link" href="/admin/invites">邀请码管理 <span>创建与核销 →</span></a><a class="quick-link" href="/register">用户注册页 <span>对外开放 →</span></a><a class="quick-link" href="/renew">用户续费页 <span>对外开放 →</span></a></div></aside></section><form class="inline" method="post" action="/admin/logout"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><button class="secondary" type="submit">退出登录</button></form></main></body></html>{{end}}
+{{define "dashboard"}}<!doctype html>
+<html lang="zh-CN">
+<head>
+  {{template "head" "控制台 · Emby 账号管理"}}
+</head>
+<body>
+<main class="app-shell">
+  {{template "admin-nav" (dict "active" "dashboard" "csrf" .CSRFToken)}}
+
+  <section class="page-heading">
+    <div>
+      <p class="eyebrow">控制台</p>
+      <h1 class="page-title">管理你的 Emby 订阅</h1>
+      <p class="page-lead">创建用户、调整订阅到期日，并通过邀请码完成注册或续费。</p>
+    </div>
+  </section>
+
+  <section class="stat-grid">
+    <article class="stat-card">
+      <p class="stat-label">业务账号</p>
+      <p class="stat-value">{{.AccountCount}}</p>
+    </article>
+    <article class="stat-card active">
+      <p class="stat-label">活跃</p>
+      <p class="stat-value">{{.ActiveCount}}</p>
+    </article>
+    <article class="stat-card disabled">
+      <p class="stat-label">已禁用</p>
+      <p class="stat-value">{{.DisabledCount}}</p>
+    </article>
+    <article class="stat-card expired">
+      <p class="stat-label">已过期</p>
+      <p class="stat-value">{{.ExpiredCount}}</p>
+    </article>
+    <article class="stat-card">
+      <p class="stat-label">邀请码</p>
+      <p class="stat-value">{{.InviteCount}}</p>
+    </article>
+  </section>
+
+  <section class="hero">
+    <article class="panel hero-card">
+      <h2>快捷入口</h2>
+      <div class="quick-links cols-2">
+        <a class="quick-link" href="/admin/accounts">账号管理 <span>创建、启用、停用 →</span></a>
+        <a class="quick-link" href="/admin/invites">邀请码管理 <span>创建与核销 →</span></a>
+        <a class="quick-link" href="/register">用户注册页 <span>对外开放 →</span></a>
+        <a class="quick-link" href="/renew">用户续费页 <span>对外开放 →</span></a>
+      </div>
+    </article>
+  </section>
+</main>
+</body>
+</html>
+{{end}}

@@ -1,1 +1,28 @@
-{{define "login"}}<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>管理员登录 · Emby 账号管理</title><link rel="stylesheet" href="/static/app.css"></head><body><main class="auth-shell"><section class="auth-card"><div class="brand"><span class="brand-mark">E</span>Emby 账号管理</div><p class="eyebrow">管理后台</p><h1 class="page-title">欢迎回来</h1><p class="page-lead">登录后管理账号、邀请码与订阅状态。</p>{{if .Error}}<p class="alert error">{{.Error}}</p>{{end}}<form method="post" action="/admin/login"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><label class="field">用户名<input name="username" autocomplete="username" placeholder="请输入管理员用户名" required autofocus></label><label class="field">密码<input type="password" name="password" autocomplete="current-password" placeholder="请输入密码" required></label><button class="btn-block" type="submit">登录管理后台</button></form></section></main></body></html>{{end}}
+{{define "login"}}<!doctype html>
+<html lang="zh-CN">
+<head>
+  {{template "head" "管理员登录 · Emby 账号管理"}}
+</head>
+<body>
+<main class="auth-shell">
+  <section class="auth-card">
+    <div class="brand"><span class="brand-mark">E</span>Emby 账号管理</div>
+    <p class="eyebrow">管理后台</p>
+    <h1 class="page-title">欢迎回来</h1>
+    <p class="page-lead">登录后管理账号、邀请码与订阅状态。</p>
+    {{if .Error}}<p class="alert error">{{.Error}}</p>{{end}}
+    <form method="post" action="/admin/login">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <label class="field">用户名
+        <input name="username" autocomplete="username" placeholder="请输入管理员用户名" required autofocus>
+      </label>
+      <label class="field">密码
+        <input type="password" name="password" autocomplete="current-password" placeholder="请输入密码" required>
+      </label>
+      <button class="btn-block" type="submit">登录管理后台</button>
+    </form>
+  </section>
+</main>
+</body>
+</html>
+{{end}}

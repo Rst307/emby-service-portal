@@ -11,6 +11,79 @@ import (
 	"github.com/emby-user-manager/emby-user-manager/internal/persistence/sqlite"
 )
 
+func TestRenderDashboardShowsAccountStats(t *testing.T) {
+	templates, err := NewTemplates(time.UTC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	templates.Render(response, "dashboard", ViewData{AccountCount: 5, ActiveCount: 2, DisabledCount: 1, ExpiredCount: 2, InviteCount: 3})
+	page := response.Body.String()
+	for _, marker := range []string{"业务账号", ">5<", "活跃", ">2<", "已禁用", "已过期", "邀请码", ">3<", "退出登录"} {
+		if !strings.Contains(page, marker) {
+			t.Fatalf("dashboard missing %q: %s", marker, page)
+		}
+	}
+}
+
+func TestRenderAccountsUsesChineseStatusLabels(t *testing.T) {
+	templates, err := NewTemplates(time.UTC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	templates.Render(response, "accounts", ViewData{Accounts: []sqlite.Account{
+		{ID: 1, Version: 2, Username: "alice", Status: "active", ExpiresAt: time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC), Note: ""},
+		{ID: 2, Version: 1, Username: "bob", Status: "disabled", ExpiresAt: time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)},
+		{ID: 3, Version: 1, Username: "carol", Status: "expired", ExpiresAt: time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)},
+	}})
+	page := response.Body.String()
+	for _, marker := range []string{"badge active\">活跃", "badge disabled\">已禁用", "badge expired\">已过期", "已到期 · 需先续费", "data-edit-account", "edit-account-dialog", "data-expires-at=\"2030-01-01T00:00\""} {
+		if !strings.Contains(page, marker) {
+			t.Fatalf("accounts page missing %q: %s", marker, page)
+		}
+	}
+	if strings.Contains(page, "badge active\">active") {
+		t.Fatalf("accounts page leaked English status: %s", page)
+	}
+}
+
+func TestRenderInvitesShowsCreatedCodeAndHumanizedDuration(t *testing.T) {
+	templates, err := NewTemplates(time.UTC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	templates.Render(response, "invites", ViewData{NewInviteCode: "EUM-test-code-123", Invites: []sqlite.InviteCode{
+		{ID: 1, CodePrefix: "EUM-TEST", Code: "EUM-test-code-123", DurationMinutes: 30 * 24 * 60, MaxUses: 1, UsedCount: 1, Enabled: true},
+		{ID: 2, CodePrefix: "EUM-OLD", DurationMinutes: 45, MaxUses: 0, Enabled: false},
+	}})
+	page := response.Body.String()
+	for _, marker := range []string{"邀请码已创建", "EUM-test-code-123", "30 天", "45 分钟", "data-confirm=\"确认删除此邀请码？\""} {
+		if !strings.Contains(page, marker) {
+			t.Fatalf("invites page missing %q: %s", marker, page)
+		}
+	}
+	if strings.Contains(page, "43200 分钟") {
+		t.Fatalf("invites page did not humanize duration: %s", page)
+	}
+}
+
+func TestRenderPortalDashboardShowsChineseStatus(t *testing.T) {
+	templates, err := NewTemplates(time.UTC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	templates.Render(response, "portal-dashboard", ViewData{Account: sqlite.Account{Username: "alice", Status: "expired", ExpiresAt: time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC), Note: "VIP"}})
+	page := response.Body.String()
+	for _, marker := range []string{"你好，alice", "badge expired\">已过期", "2030-01-01 00:00", "退出登录"} {
+		if !strings.Contains(page, marker) {
+			t.Fatalf("portal dashboard missing %q: %s", marker, page)
+		}
+	}
+}
+
 func TestRenderFormatsTimesInConfiguredLocation(t *testing.T) {
 	location, err := time.LoadLocation("Asia/Shanghai")
 	if err != nil {
@@ -23,7 +96,7 @@ func TestRenderFormatsTimesInConfiguredLocation(t *testing.T) {
 	response := httptest.NewRecorder()
 	templates.Render(response, "accounts", ViewData{Accounts: []sqlite.Account{{ExpiresAt: time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)}}})
 	page := response.Body.String()
-	if response.Code != http.StatusOK || !strings.Contains(page, "2030-01-01 08:00") || !strings.Contains(page, "value=\"2030-01-01T08:00\"") || !strings.Contains(page, "Asia/Shanghai") {
+	if response.Code != http.StatusOK || !strings.Contains(page, "2030-01-01 08:00") || !strings.Contains(page, "data-expires-at=\"2030-01-01T08:00\"") || !strings.Contains(page, "Asia/Shanghai") {
 		t.Fatalf("configured time zone was not rendered: %s", page)
 	}
 }

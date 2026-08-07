@@ -1,3 +1,84 @@
-{{define "register"}}<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>注册 Emby 账号</title><link rel="stylesheet" href="/static/app.css"></head><body><main class="auth-shell"><section class="auth-card"><div class="brand"><span class="brand-mark">E</span>Emby 服务</div><p class="eyebrow">邀请码注册</p><h1 class="page-title">创建你的账号</h1><p class="page-lead">输入有效邀请码后，即可开通 Emby 服务。</p>{{if .Error}}<p class="alert error">{{.Error}}</p>{{end}}<form method="post" action="/register"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><label class="field">邀请码<input name="code" autocomplete="off" placeholder="例如 EUM-..." required></label><label class="field">用户名<input name="username" autocomplete="username" placeholder="设置登录用户名" required></label><label class="field">密码<input type="password" name="password" autocomplete="new-password" minlength="8" placeholder="至少 8 位" required></label><button class="btn-block">立即注册</button></form><p class="auth-foot">已有账号？ <a href="/login">登录用户中心</a> · <a href="/renew">使用邀请码续费</a></p></section></main></body></html>{{end}}
-{{define "renew"}}<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Emby 账号续费</title><link rel="stylesheet" href="/static/app.css"></head><body><main class="auth-shell"><section class="auth-card"><div class="brand"><span class="brand-mark">E</span>Emby 服务</div><p class="eyebrow">邀请码续费</p><h1 class="page-title">延长订阅时间</h1><p class="page-lead">续费将在现有到期日基础上增加邀请码对应时长。</p>{{if .Error}}<p class="alert error">{{.Error}}</p>{{end}}<form method="post" action="/renew"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><label class="field">邀请码<input name="code" autocomplete="off" placeholder="例如 EUM-..." required></label><label class="field">用户名<input name="username" autocomplete="username" placeholder="请输入 Emby 用户名" required></label><label class="field">账号密码<input type="password" name="password" autocomplete="current-password" placeholder="验证账号归属" required></label><button class="btn-block">确认续费</button></form><p class="auth-foot"><a href="/login">登录用户中心</a> · 还没有账号？ <a href="/register">使用邀请码注册</a></p></section></main></body></html>{{end}}
-{{define "result"}}<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>操作成功</title><link rel="stylesheet" href="/static/app.css"></head><body><main class="auth-shell"><section class="auth-card result-card"><div class="result-icon">✓</div><p class="eyebrow">操作成功</p><h1 class="page-title">已完成</h1><p class="page-lead">{{.Message}}</p><p class="auth-foot"><a href="/">返回首页</a> · <a href="/register">注册账号</a> · <a href="/renew">账号续费</a></p></section></main></body></html>{{end}}
+{{define "register"}}<!doctype html>
+<html lang="zh-CN">
+<head>
+  {{template "head" "注册 Emby 账号"}}
+</head>
+<body>
+<main class="auth-shell">
+  <section class="auth-card">
+    <div class="brand"><span class="brand-mark">E</span>Emby 服务</div>
+    <p class="eyebrow">邀请码注册</p>
+    <h1 class="page-title">创建你的账号</h1>
+    <p class="page-lead">输入有效邀请码后，即可开通 Emby 服务。</p>
+    {{if .Error}}<p class="alert error">{{.Error}}</p>{{end}}
+    <form method="post" action="/register">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <label class="field">邀请码
+        <input name="code" autocomplete="off" placeholder="例如 EUM-..." required>
+      </label>
+      <label class="field">用户名
+        <input name="username" autocomplete="username" placeholder="设置登录用户名" required>
+      </label>
+      <label class="field">密码
+        <input type="password" name="password" autocomplete="new-password" minlength="8" placeholder="至少 8 位" required>
+      </label>
+      <button class="btn-block" type="submit">立即注册</button>
+    </form>
+    <p class="auth-foot">已有账号？ <a href="/login">登录用户中心</a> · <a href="/renew">使用邀请码续费</a></p>
+  </section>
+</main>
+</body>
+</html>
+{{end}}
+
+{{define "renew"}}<!doctype html>
+<html lang="zh-CN">
+<head>
+  {{template "head" "Emby 账号续费"}}
+</head>
+<body>
+<main class="auth-shell">
+  <section class="auth-card">
+    <div class="brand"><span class="brand-mark">E</span>Emby 服务</div>
+    <p class="eyebrow">邀请码续费</p>
+    <h1 class="page-title">延长订阅时间</h1>
+    <p class="page-lead">续费将在现有到期日基础上增加邀请码对应时长。</p>
+    {{if .Error}}<p class="alert error">{{.Error}}</p>{{end}}
+    <form method="post" action="/renew">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <label class="field">邀请码
+        <input name="code" autocomplete="off" placeholder="例如 EUM-..." required>
+      </label>
+      <label class="field">用户名
+        <input name="username" autocomplete="username" placeholder="请输入 Emby 用户名" required>
+      </label>
+      <label class="field">账号密码
+        <input type="password" name="password" autocomplete="current-password" placeholder="验证账号归属" required>
+      </label>
+      <button class="btn-block" type="submit">确认续费</button>
+    </form>
+    <p class="auth-foot"><a href="/login">登录用户中心</a> · 还没有账号？ <a href="/register">使用邀请码注册</a></p>
+  </section>
+</main>
+</body>
+</html>
+{{end}}
+
+{{define "result"}}<!doctype html>
+<html lang="zh-CN">
+<head>
+  {{template "head" "操作成功"}}
+</head>
+<body>
+<main class="auth-shell">
+  <section class="auth-card result-card">
+    <div class="result-icon">✓</div>
+    <p class="eyebrow">操作成功</p>
+    <h1 class="page-title">已完成</h1>
+    <p class="page-lead">{{.Message}}</p>
+    <p class="auth-foot"><a href="/">返回首页</a> · <a href="/register">注册账号</a> · <a href="/renew">账号续费</a></p>
+  </section>
+</main>
+</body>
+</html>
+{{end}}
