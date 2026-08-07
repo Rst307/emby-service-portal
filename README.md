@@ -16,6 +16,7 @@
 - `Idempotency-Key` 防止 API 创建账号或注册时的重复请求。
 - 业务账号乐观锁版本控制，避免续费、管理员操作和到期任务相互覆盖。
 - 内建登录、注册和续费限流；安全响应头、请求体限制、缓存保护。
+- 可配置的显示时区（默认上海，后台「设置」页随时切换），时间展示统一按所选时区转换，存储始终 UTC。
 
 ## 快速开始
 
@@ -56,7 +57,7 @@ go run ./cmd/emby-user-manager
 | `EUM_ADMIN_PASSWORD` | 是 | 首次启动时创建的管理员密码；不会覆盖已有管理员。 |
 | `EUM_COOKIE_SECURE` | 否 | HTTPS 生产环境设为 `true`；仅可信局域网的直接 HTTP 可设为 `false`。 |
 | `EUM_SESSION_TTL` | 否 | 会话有效期，默认 `24h`。 |
-| `EUM_TIME_ZONE` | 否 | 网页显示时间及后台时间输入使用的 IANA 时区，默认 `UTC`。例如上海时间填写 `Asia/Shanghai`。数据库和 API 仍以 UTC/RFC3339 保存和返回。 |
+| `EUM_TIME_ZONE` | 否 | 初始显示时区（首次启动写入设置，之后可在后台「设置」页随时切换），默认 `Asia/Shanghai`。所有页面展示的时间都会按此转换；数据库和 API 仍以 UTC/RFC3339 保存和返回。 |
 
 生成随机密钥：
 

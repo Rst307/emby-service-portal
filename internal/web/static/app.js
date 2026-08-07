@@ -85,6 +85,21 @@ document.addEventListener("submit", (event) => {
 })();
 
 /* ============================================================
+   显示时区设置（设置页）
+   ============================================================ */
+
+(() => {
+  const select = document.querySelector("[data-time-zone-select]");
+  const customField = document.querySelector("[data-custom-time-zone]");
+  if (!select || !customField) return;
+  const sync = () => {
+    customField.hidden = select.value !== "__custom__";
+  };
+  select.addEventListener("change", sync);
+  sync();
+})();
+
+/* ============================================================
    批量账号操作（账号列表页）
    ============================================================ */
 

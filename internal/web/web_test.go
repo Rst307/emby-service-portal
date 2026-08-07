@@ -10,10 +10,9 @@ func TestParseAccountDateTimePreservesAmbiguousOriginalInstant(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := &Server{timeLocation: location}
 	original := time.Date(2024, 11, 3, 6, 30, 0, 0, time.UTC) // second 01:30, after fall-back
 
-	parsed, err := server.parseAccountDateTime("2024-11-03T01:30", original.Format(time.RFC3339Nano))
+	parsed, err := parseAccountDateTimeIn("2024-11-03T01:30", original.Format(time.RFC3339Nano), location)
 	if err != nil {
 		t.Fatal(err)
 	}

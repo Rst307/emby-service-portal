@@ -48,7 +48,7 @@ func FromEnv() (Config, error) {
 		AdminPassword:         os.Getenv("EUM_ADMIN_PASSWORD"),
 		CookieSecure:          cookieSecure,
 		SessionTTL:            ttl,
-		TimeZone:              value("EUM_TIME_ZONE", "UTC"),
+		TimeZone:              value("EUM_TIME_ZONE", "Asia/Shanghai"),
 	}
 	return cfg, cfg.Validate()
 }

@@ -23,6 +23,7 @@ import (
 	"github.com/emby-user-manager/emby-user-manager/internal/persistence/sqlite"
 	"github.com/emby-user-manager/emby-user-manager/internal/portal"
 	"github.com/emby-user-manager/emby-user-manager/internal/ratelimit"
+	"github.com/emby-user-manager/emby-user-manager/internal/settings"
 	"github.com/emby-user-manager/emby-user-manager/internal/web/admin"
 )
 
@@ -35,18 +36,18 @@ type Server struct {
 	portal       *portal.Service
 	accounts     *accounts.Service
 	invites      *invites.Service
+	settings     *settings.Service
 	apiKey       string
 	templates    *admin.Templates
 	cookieSecure bool
 	sessionTTL   time.Duration
-	timeLocation *time.Location
 	loginLimit   *ratelimit.Limiter
 	publicLimit  *ratelimit.Limiter
 }
 
-func New(authService *auth.Service, portalService *portal.Service, accountService *accounts.Service, inviteService *invites.Service, apiKey string, cookieSecure bool, sessionTTL time.Duration, timeLocation *time.Location) (*Server, error) {
+func New(authService *auth.Service, portalService *portal.Service, accountService *accounts.Service, inviteService *invites.Service, settingsService *settings.Service, apiKey string, cookieSecure bool, sessionTTL time.Duration, timeLocation *time.Location) (*Server, error) {
 	if timeLocation == nil {
-		timeLocation = time.UTC
+		timeLocation, _ = time.LoadLocation("Asia/Shanghai")
 	}
 	templates, err := admin.NewTemplates(timeLocation)
 	if err != nil {
@@ -54,9 +55,14 @@ func New(authService *auth.Service, portalService *portal.Service, accountServic
 	}
 	return &Server{
 		auth: authService, portal: portalService, accounts: accountService, invites: inviteService,
-		apiKey: apiKey, templates: templates, cookieSecure: cookieSecure, sessionTTL: sessionTTL, timeLocation: timeLocation,
+		settings: settingsService, apiKey: apiKey, templates: templates, cookieSecure: cookieSecure, sessionTTL: sessionTTL,
 		loginLimit: ratelimit.New(10, time.Minute), publicLimit: ratelimit.New(20, time.Minute),
 	}, nil
+}
+
+// displayZone returns the runtime-configured display time zone name and location.
+func (s *Server) displayZone(r *http.Request) (string, *time.Location) {
+	return s.settings.DisplayTimeZone(r.Context())
 }
 
 func (s *Server) Handler() http.Handler {
@@ -95,6 +101,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /admin/invites", s.inviteCreate)
 	mux.HandleFunc("POST /admin/invites/{id}/toggle", s.inviteToggle)
 	mux.HandleFunc("POST /admin/invites/{id}/delete", s.inviteDelete)
+	mux.HandleFunc("GET /admin/settings", s.adminSettingsPage)
+	mux.HandleFunc("POST /admin/settings", s.adminSettingsUpdate)
 	mux.HandleFunc("GET /portal/login", s.portalLoginPage)
 	mux.HandleFunc("POST /portal/login", s.portalLogin)
 	mux.HandleFunc("GET /portal/", s.portalDashboard)
@@ -454,15 +462,24 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
 }
-func (s *Server) parseDateTime(value string) (time.Time, error) {
-	return time.ParseInLocation("2006-01-02T15:04", value, s.timeLocation)
+func (s *Server) parseDateTime(r *http.Request, value string) (time.Time, error) {
+	_, location := s.displayZone(r)
+	return time.ParseInLocation("2006-01-02T15:04", value, location)
 }
 
-func (s *Server) parseAccountDateTime(value, original string) (time.Time, error) {
-	if originalTime, err := time.Parse(time.RFC3339Nano, original); err == nil && originalTime.In(s.timeLocation).Format("2006-01-02T15:04") == value {
+func (s *Server) parseAccountDateTime(r *http.Request, value, original string) (time.Time, error) {
+	_, location := s.displayZone(r)
+	return parseAccountDateTimeIn(value, original, location)
+}
+
+// parseAccountDateTimeIn preserves the original instant when the edited value
+// matches the original rendered in the display time zone (round trip across a
+// DST fall-back would otherwise shift the instant).
+func parseAccountDateTimeIn(value, original string, location *time.Location) (time.Time, error) {
+	if originalTime, err := time.Parse(time.RFC3339Nano, original); err == nil && originalTime.In(location).Format("2006-01-02T15:04") == value {
 		return originalTime, nil
 	}
-	return s.parseDateTime(value)
+	return time.ParseInLocation("2006-01-02T15:04", value, location)
 }
 
 func accountID(r *http.Request) (int64, error) {
@@ -553,6 +570,85 @@ func (s *Server) portalAccount(r *http.Request) (sqlite.Account, bool) {
 	}
 	return s.portal.Account(r.Context(), cookie.Value)
 }
+
+// commonTimeZones lists the zones offered on the settings page, most likely
+// ones first. Any other valid IANA zone can still be entered as a custom value.
+var commonTimeZones = []string{
+	"Asia/Shanghai", "Asia/Hong_Kong", "Asia/Taipei", "Asia/Tokyo", "Asia/Seoul",
+	"Asia/Singapore", "Asia/Kuala_Lumpur", "Asia/Jakarta", "Asia/Bangkok", "Asia/Ho_Chi_Minh",
+	"Asia/Manila", "Asia/Kolkata", "Asia/Dubai", "Asia/Jerusalem",
+	"Europe/London", "Europe/Paris", "Europe/Berlin", "Europe/Moscow",
+	"America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles", "America/Sao_Paulo",
+	"Australia/Sydney", "Pacific/Auckland", "UTC",
+}
+
+func timeZoneOption(name string) admin.TimeZoneOption {
+	label := name
+	if location, err := time.LoadLocation(name); err == nil {
+		label = name + "（" + time.Now().In(location).Format("UTC-07:00") + "）"
+	}
+	return admin.TimeZoneOption{Name: name, Label: label}
+}
+
+// timeZoneOptions returns the curated zone list plus the current zone when it
+// is not part of the list, so a previously custom zone stays selectable.
+func timeZoneOptions(current string) []admin.TimeZoneOption {
+	options := make([]admin.TimeZoneOption, 0, len(commonTimeZones)+1)
+	seen := false
+	for _, name := range commonTimeZones {
+		options = append(options, timeZoneOption(name))
+		if name == current {
+			seen = true
+		}
+	}
+	if current != "" && !seen {
+		options = append(options, timeZoneOption(current))
+	}
+	return options
+}
+
+func (s *Server) adminSettingsPage(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdmin(w, r) {
+		return
+	}
+	name, location := s.displayZone(r)
+	s.templates.Render(w, "settings", admin.ViewData{
+		CSRFToken:       csrfFromRequest(r),
+		Message:         r.URL.Query().Get("message"),
+		TimeZone:        name,
+		TimeZoneNow:     time.Now().In(location).Format("2006-01-02 15:04:05"),
+		TimeZoneOptions: timeZoneOptions(name),
+	})
+}
+
+func (s *Server) adminSettingsUpdate(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdmin(w, r) {
+		return
+	}
+	if !validCSRF(r) {
+		http.Error(w, "invalid CSRF token", http.StatusForbidden)
+		return
+	}
+	name := strings.TrimSpace(r.Form.Get("time_zone"))
+	if name == "__custom__" {
+		name = strings.TrimSpace(r.Form.Get("custom_time_zone"))
+	}
+	if err := s.settings.SetDisplayTimeZone(r.Context(), name); err != nil {
+		current, location := s.displayZone(r)
+		s.templates.RenderStatus(w, "settings", admin.ViewData{
+			CSRFToken:       csrfFromRequest(r),
+			Error:           "保存失败：" + err.Error(),
+			TimeZone:        current,
+			TimeZoneNow:     time.Now().In(location).Format("2006-01-02 15:04:05"),
+			TimeZoneOptions: timeZoneOptions(current),
+		}, http.StatusBadRequest)
+		return
+	}
+	if _, location := s.displayZone(r); location != nil {
+		s.templates.SetLocation(location)
+	}
+	http.Redirect(w, r, "/admin/settings?message="+url.QueryEscape("显示时区已更新为 "+name), http.StatusSeeOther)
+}
 func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 	if !s.requireAdmin(w, r) {
 		return
@@ -590,7 +686,7 @@ func (s *Server) accountCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid CSRF token", http.StatusForbidden)
 		return
 	}
-	expiresAt, err := s.parseDateTime(r.Form.Get("expires_at"))
+	expiresAt, err := s.parseDateTime(r, r.Form.Get("expires_at"))
 	if err == nil {
 		_, err = s.accounts.Create(r.Context(), accounts.CreateInput{Username: r.Form.Get("username"), Password: r.Form.Get("password"), ExpiresAt: expiresAt, Note: r.Form.Get("note")})
 	}
@@ -608,7 +704,7 @@ func (s *Server) accountSync(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid CSRF token", http.StatusForbidden)
 		return
 	}
-	expiresAt, err := s.parseDateTime(r.Form.Get("expires_at"))
+	expiresAt, err := s.parseDateTime(r, r.Form.Get("expires_at"))
 	if err == nil {
 		_, err = s.accounts.SyncFromEmby(r.Context(), accounts.SyncInput{ExpiresAt: expiresAt, Note: r.Form.Get("note")})
 	}
@@ -627,7 +723,7 @@ func (s *Server) accountUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	expiresAt, parseErr := s.parseAccountDateTime(r.Form.Get("expires_at"), r.Form.Get("expires_at_original"))
+	expiresAt, parseErr := s.parseAccountDateTime(r, r.Form.Get("expires_at"), r.Form.Get("expires_at_original"))
 	if err == nil && id > 0 && parseErr == nil {
 		version, versionErr := accountVersion(r)
 		if versionErr != nil {
@@ -657,7 +753,7 @@ func (s *Server) accountBatch(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		switch input.Action {
 		case accounts.BatchSetExpiry:
-			input.ExpiresAt, err = s.parseDateTime(r.Form.Get("expires_at"))
+			input.ExpiresAt, err = s.parseDateTime(r, r.Form.Get("expires_at"))
 		case accounts.BatchExtend, accounts.BatchReduce:
 			input.Duration, err = batchDuration(r.Form.Get("duration"), r.Form.Get("duration_unit"))
 		}
@@ -917,7 +1013,8 @@ func (s *Server) renew(w http.ResponseWriter, r *http.Request) {
 		s.templates.Render(w, "renew", admin.ViewData{CSRFToken: csrfFromRequest(r), Error: "续费失败：邀请码不可用或账号不存在"})
 		return
 	}
-	s.templates.Render(w, "result", admin.ViewData{Message: "续费成功，新的到期时间：" + account.ExpiresAt.In(s.timeLocation).Format("2006-01-02 15:04") + " " + s.timeLocation.String()})
+	_, location := s.displayZone(r)
+	s.templates.Render(w, "result", admin.ViewData{Message: "续费成功，新的到期时间：" + account.ExpiresAt.In(location).Format("2006-01-02 15:04") + " " + location.String()})
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {

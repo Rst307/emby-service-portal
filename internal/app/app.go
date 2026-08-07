@@ -15,6 +15,7 @@ import (
 	"github.com/emby-user-manager/emby-user-manager/internal/invites"
 	"github.com/emby-user-manager/emby-user-manager/internal/persistence/sqlite"
 	"github.com/emby-user-manager/emby-user-manager/internal/portal"
+	"github.com/emby-user-manager/emby-user-manager/internal/settings"
 	"github.com/emby-user-manager/emby-user-manager/internal/web"
 )
 
@@ -50,7 +51,11 @@ func New(ctx context.Context, cfg config.Config) (*Application, error) {
 	if err != nil {
 		return closeOnError(err)
 	}
-	webServer, err := web.New(authService, portalService, accountService, inviteService, cfg.APIKey, cfg.CookieSecure, cfg.SessionTTL, timeLocation)
+	settingsService := settings.New(store, timeLocation)
+	if err := settingsService.Ensure(ctx); err != nil {
+		return closeOnError(fmt.Errorf("seed settings: %w", err))
+	}
+	webServer, err := web.New(authService, portalService, accountService, inviteService, settingsService, cfg.APIKey, cfg.CookieSecure, cfg.SessionTTL, timeLocation)
 	if err != nil {
 		return closeOnError(fmt.Errorf("configure web server: %w", err))
 	}

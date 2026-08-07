@@ -1,0 +1,51 @@
+{{define "settings"}}<!doctype html>
+<html lang="zh-CN">
+{{template "head" "设置 · Emby 账号管理"}}
+<body>
+  <main class="app-shell">
+    {{template "admin-nav" (dict "active" "settings" "csrf" .CSRFToken)}}
+
+    <section class="page-heading">
+      <div>
+        <p class="eyebrow">系统</p>
+        <h1 class="page-title">设置</h1>
+        <p class="page-lead">管理系统的运行参数。</p>
+      </div>
+    </section>
+
+    {{template "alerts" .}}
+
+    <section class="panel">
+      <header class="panel-header">
+        <div>
+          <h2 class="panel-title">显示时区</h2>
+          <p class="panel-copy">所有页面（后台、用户中心、注册 / 续费页）展示的时间都会按所选时区转换；数据库和 API 始终以 UTC 保存。</p>
+        </div>
+      </header>
+      <div class="panel-body">
+        <form method="post" action="/admin/settings" class="stack-form">
+          <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+          <div class="form-grid">
+            <label class="field">时区
+              <select name="time_zone" data-time-zone-select>
+                {{range .TimeZoneOptions}}
+                <option value="{{.Name}}"{{if eq $.TimeZone .Name}} selected{{end}}>{{.Label}}</option>
+                {{end}}
+                <option value="__custom__">自定义…</option>
+              </select>
+            </label>
+            <label class="field" data-custom-time-zone hidden>自定义 IANA 时区
+              <input name="custom_time_zone" placeholder="例如：Europe/Paris" autocomplete="off">
+            </label>
+          </div>
+          <p class="subtle">当前显示时区：{{.TimeZone}}（本地时间 {{.TimeZoneNow}}）。</p>
+          <div class="form-actions">
+            <button type="submit">保存设置</button>
+          </div>
+        </form>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
+{{end}}

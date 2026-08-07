@@ -164,6 +164,69 @@ func TestAdminAccountTimeIsAlwaysInterpretedAsUTC(t *testing.T) {
 	}
 }
 
+func TestAdminCanChangeDisplayTimeZone(t *testing.T) {
+	application := testApplicationWithTimeZone(t, "Asia/Shanghai")
+	defer application.Close()
+	server := httptest.NewServer(application.Handler())
+	defer server.Close()
+	jar, _ := cookiejar.New(nil)
+	client := &http.Client{Jar: jar, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
+	login(t, client, server.URL)
+
+	// 设置页默认选中配置的时区（Asia/Shanghai）
+	response := get(t, client, server.URL+"/admin/settings")
+	page := body(t, response)
+	if !strings.Contains(page, `value="Asia/Shanghai" selected`) || !strings.Contains(page, "设置") || !strings.Contains(page, "保存设置") {
+		t.Fatalf("settings page does not show default zone selected: %s", page)
+	}
+
+	// 切到 America/New_York，账号页与后台时间输入随之转换
+	response = postForm(t, client, server.URL+"/admin/settings", url.Values{"time_zone": {"America/New_York"}, "csrf_token": {csrf(t, page)}})
+	if response.StatusCode != http.StatusSeeOther {
+		t.Fatalf("update settings status = %d: %s", response.StatusCode, body(t, response))
+	}
+	page = body(t, get(t, client, server.URL+response.Header.Get("Location")))
+	if !strings.Contains(page, "显示时区已更新为 America/New_York") {
+		t.Fatalf("settings update notice absent: %s", page)
+	}
+	response = get(t, client, server.URL+"/admin/accounts")
+	page = body(t, response)
+	if !strings.Contains(page, "时间以 America/New_York 展示") {
+		t.Fatalf("accounts page did not switch display zone: %s", page)
+	}
+	response = postForm(t, client, server.URL+"/admin/accounts", url.Values{"username": {"ny-account"}, "password": {"password123"}, "expires_at": {"2030-01-01T00:00"}, "csrf_token": {csrf(t, page)}})
+	if response.StatusCode != http.StatusSeeOther {
+		t.Fatalf("create account status = %d: %s", response.StatusCode, body(t, response))
+	}
+	// 输入按显示时区（纽约）解释，页面原样展示，API 则以 UTC 保存
+	if page := body(t, get(t, client, server.URL+"/admin/accounts")); !strings.Contains(page, "2030-01-01 00:00") || !strings.Contains(page, "America/New_York") {
+		t.Fatalf("account expiry not shown in New York time: %s", page)
+	}
+	if response := body(t, getWithKey(t, http.DefaultClient, server.URL+"/api/v1/accounts", "integration-key")); !strings.Contains(response, "2030-01-01T05:00:00Z") {
+		t.Fatalf("account expiry not stored as UTC: %s", response)
+	}
+
+	// 自定义时区：选择“自定义”并提供任意 IANA 名称
+	page = body(t, get(t, client, server.URL+"/admin/settings"))
+	response = postForm(t, client, server.URL+"/admin/settings", url.Values{"time_zone": {"__custom__"}, "custom_time_zone": {"Europe/Paris"}, "csrf_token": {csrf(t, page)}})
+	if response.StatusCode != http.StatusSeeOther {
+		t.Fatalf("custom zone update status = %d: %s", response.StatusCode, body(t, response))
+	}
+	if page := body(t, get(t, client, server.URL+"/admin/accounts")); !strings.Contains(page, "时间以 Europe/Paris 展示") {
+		t.Fatalf("accounts page did not switch to custom zone: %s", page)
+	}
+
+	// 无效时区被拒绝并保留原设置
+	page = body(t, get(t, client, server.URL+"/admin/settings"))
+	response = postForm(t, client, server.URL+"/admin/settings", url.Values{"time_zone": {"__custom__"}, "custom_time_zone": {"not/a-zone"}, "csrf_token": {csrf(t, page)}})
+	if response.StatusCode != http.StatusBadRequest || !strings.Contains(body(t, response), "保存失败") {
+		t.Fatalf("invalid zone was not rejected: %d %s", response.StatusCode, body(t, response))
+	}
+	if page := body(t, get(t, client, server.URL+"/admin/accounts")); !strings.Contains(page, "时间以 Europe/Paris 展示") {
+		t.Fatalf("invalid zone replaced the stored setting: %s", page)
+	}
+}
+
 func TestBatchAccountExpiryManagement(t *testing.T) {
 	application := testApplication(t)
 	defer application.Close()
@@ -181,7 +244,7 @@ func TestBatchAccountExpiryManagement(t *testing.T) {
 
 	response = get(t, client, server.URL+"/admin/accounts")
 	page := body(t, response)
-	if !strings.Contains(page, "account-batch") || !strings.Contains(page, "batch-select") || !strings.Contains(page, "data-batch-status-filter") || !strings.Contains(page, "data-batch-select-status") || !strings.Contains(page, "app.js?v=3") {
+	if !strings.Contains(page, "account-batch") || !strings.Contains(page, "batch-select") || !strings.Contains(page, "data-batch-status-filter") || !strings.Contains(page, "data-batch-select-status") || !strings.Contains(page, "app.js?v=4") {
 		t.Fatalf("batch controls absent: %s", page)
 	}
 	response = postForm(t, client, server.URL+"/admin/accounts/batch", url.Values{"account_id": {"1:1"}, "action": {"extend"}, "duration": {"2"}, "duration_unit": {"day"}, "csrf_token": {csrf(t, page)}})

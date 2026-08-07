@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/emby-user-manager/emby-user-manager/internal/persistence/sqlite"
@@ -15,29 +16,44 @@ import (
 var files embed.FS
 
 type ViewData struct {
-	CSRFToken     string
-	Error         string
-	Message       string
-	Accounts      []sqlite.Account
-	Account       sqlite.Account
-	Invites       []sqlite.InviteCode
-	NewInviteCode string
-	AccountCount  int
-	ActiveCount   int
-	DisabledCount int
-	ExpiredCount  int
-	InviteCount   int
+	CSRFToken       string
+	Error           string
+	Message         string
+	Accounts        []sqlite.Account
+	Account         sqlite.Account
+	Invites         []sqlite.InviteCode
+	NewInviteCode   string
+	AccountCount    int
+	ActiveCount     int
+	DisabledCount   int
+	ExpiredCount    int
+	InviteCount     int
+	TimeZone        string
+	TimeZoneNow     string
+	TimeZoneOptions []TimeZoneOption
 }
 
-type Templates struct{ templates *template.Template }
+// TimeZoneOption is a selectable time zone for the settings page.
+type TimeZoneOption struct {
+	Name  string
+	Label string
+}
+
+type Templates struct {
+	templates *template.Template
+	// location is swapped atomically when the display time zone changes.
+	location atomic.Pointer[time.Location]
+}
 
 func NewTemplates(location *time.Location) (*Templates, error) {
 	if location == nil {
 		location = time.UTC
 	}
+	templates := &Templates{}
+	templates.location.Store(location)
 	functions := template.FuncMap{
-		"formatTime": func(value time.Time, layout string) string { return value.In(location).Format(layout) },
-		"timeZone":   func() string { return location.String() },
+		"formatTime": func(value time.Time, layout string) string { return value.In(templates.location.Load()).Format(layout) },
+		"timeZone":   func() string { return templates.location.Load().String() },
 		"statusLabel": func(status string) string {
 			switch status {
 			case "active":
@@ -81,7 +97,15 @@ func NewTemplates(location *time.Location) (*Templates, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Templates{templates: t}, nil
+	templates.templates = t
+	return templates, nil
+}
+
+// SetLocation swaps the display time zone used by all templates.
+func (t *Templates) SetLocation(location *time.Location) {
+	if location != nil {
+		t.location.Store(location)
+	}
 }
 
 func (t *Templates) Render(w http.ResponseWriter, name string, data ViewData) {
