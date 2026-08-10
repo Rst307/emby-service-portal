@@ -6,11 +6,14 @@
 <body>
 <main class="auth-shell">
   <section class="auth-card">
-    <div class="brand"><span class="brand-mark">E</span>Emby 服务</div>
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">E</span>
+      <span class="brand-copy"><strong>Emby 服务</strong><small>MEMBER ACCESS</small></span>
+    </div>
     <p class="eyebrow">邀请码注册</p>
     <h1 class="page-title">创建你的账号</h1>
     <p class="page-lead">输入有效邀请码后，即可开通 Emby 服务。</p>
-    {{if .Error}}<p class="alert error">{{.Error}}</p>{{end}}
+    {{if .Error}}<p class="alert error" role="alert">{{.Error}}</p>{{end}}
     <form method="post" action="/register">
       <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
       <label class="field">邀请码
@@ -39,11 +42,14 @@
 <body>
 <main class="auth-shell">
   <section class="auth-card">
-    <div class="brand"><span class="brand-mark">E</span>Emby 服务</div>
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">E</span>
+      <span class="brand-copy"><strong>Emby 服务</strong><small>MEMBER ACCESS</small></span>
+    </div>
     <p class="eyebrow">邀请码续费</p>
     <h1 class="page-title">延长订阅时间</h1>
     <p class="page-lead">续费将在现有到期日基础上增加邀请码对应时长。</p>
-    {{if .Error}}<p class="alert error">{{.Error}}</p>{{end}}
+    {{if .Error}}<p class="alert error" role="alert">{{.Error}}</p>{{end}}
     <form method="post" action="/renew">
       <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
       <label class="field">邀请码

@@ -6,11 +6,14 @@
 <body>
 <main class="auth-shell">
   <section class="auth-card">
-    <div class="brand"><span class="brand-mark">E</span>Emby 服务</div>
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">E</span>
+      <span class="brand-copy"><strong>Emby 服务</strong><small>MEMBER ACCESS</small></span>
+    </div>
     <p class="eyebrow">用户中心</p>
     <h1 class="page-title">查看你的订阅</h1>
     <p class="page-lead">使用你的 Emby 用户名和密码登录；密码不会被保存。</p>
-    {{if .Error}}<p class="alert error">{{.Error}}</p>{{end}}
+    {{if .Error}}<p class="alert error" role="alert">{{.Error}}</p>{{end}}
     <form method="post" action="/portal/login">
       <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
       <label class="field">用户名
@@ -36,9 +39,12 @@
 <body>
 <main class="app-shell">
   <header class="topbar">
-    <div class="brand"><span class="brand-mark">E</span>Emby 服务</div>
-    <nav class="nav-links">
-      <a class="active" href="/portal/">我的订阅</a>
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">E</span>
+      <span class="brand-copy"><strong>Emby 服务</strong><small>MEMBER ACCESS</small></span>
+    </div>
+    <nav class="nav-links" aria-label="用户中心导航">
+      <a class="active" aria-current="page" href="/portal/">我的订阅</a>
       <a href="/renew">续费</a>
     </nav>
     <form class="logout-form" method="post" action="/portal/logout">

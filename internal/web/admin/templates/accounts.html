@@ -130,14 +130,15 @@
     </header>
     <div class="table-wrap">
       <table>
+        <caption class="sr-only">受管 Emby 用户列表</caption>
         <thead>
           <tr>
-            <th class="col-check"><input type="checkbox" aria-label="全选账号" data-batch-select-all></th>
-            <th>用户名</th>
-            <th>状态</th>
-            <th>到期时间</th>
-            <th>备注</th>
-            <th class="col-actions">操作</th>
+            <th scope="col" class="col-check"><input type="checkbox" aria-label="全选账号" data-batch-select-all></th>
+            <th scope="col">用户名</th>
+            <th scope="col">状态</th>
+            <th scope="col">到期时间</th>
+            <th scope="col">备注</th>
+            <th scope="col" class="col-actions">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -190,13 +191,13 @@
   </section>
 </main>
 
-<dialog id="edit-account-dialog">
+<dialog id="edit-account-dialog" aria-labelledby="edit-account-title" aria-describedby="edit-username">
   <form method="post" id="edit-account-form" class="stack-form">
     <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
     <input type="hidden" name="version" id="edit-version">
     <input type="hidden" name="expires_at_original" id="edit-expires-original">
     <div class="dialog-head">
-      <h2 class="panel-title">编辑账号</h2>
+      <h2 class="panel-title" id="edit-account-title">编辑账号</h2>
       <p class="subtle" id="edit-username"></p>
     </div>
     <label class="field">到期时间

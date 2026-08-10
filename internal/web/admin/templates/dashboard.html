@@ -16,7 +16,7 @@
   </section>
 
   <section class="stat-grid">
-    <article class="stat-card">
+    <article class="stat-card total">
       <p class="stat-label">业务账号</p>
       <p class="stat-value">{{.AccountCount}}</p>
     </article>
@@ -32,15 +32,32 @@
       <p class="stat-label">已过期</p>
       <p class="stat-value">{{.ExpiredCount}}</p>
     </article>
-    <article class="stat-card">
+    <article class="stat-card invites">
       <p class="stat-label">邀请码</p>
       <p class="stat-value">{{.InviteCount}}</p>
     </article>
   </section>
 
-  <section class="hero">
-    <article class="panel hero-card">
-      <h2>快捷入口</h2>
+  <section class="hero dashboard-hero">
+    <article class="panel hero-card hero-overview">
+      <div class="hero-topline">
+        <p class="section-kicker">ACCESS / OVERVIEW</p>
+        <span class="hero-code">EUM · CONTROL</span>
+      </div>
+      <h2>订阅通行状况</h2>
+      <div class="hero-number"><strong>{{.ActiveCount}}</strong><span>活跃业务账号</span></div>
+      <p class="page-lead">系统会在到期后自动禁用登录，并将访问状态同步到 Emby。</p>
+      <div class="hero-meta">
+        <span>需要关注 <b>{{.ExpiredCount}}</b> 个已过期账号</span>
+        <span>已禁用 <b>{{.DisabledCount}}</b> 个</span>
+      </div>
+    </article>
+    <article class="panel hero-card operator-panel">
+      <div class="hero-topline">
+        <p class="section-kicker">OPERATOR LINKS</p>
+        <span class="hero-code">OPEN</span>
+      </div>
+      <h2>常用入口</h2>
       <div class="quick-links cols-2">
         <a class="quick-link" href="/admin/accounts">账号管理 <span>创建、启用、停用 →</span></a>
         <a class="quick-link" href="/admin/invites">邀请码管理 <span>创建与核销 →</span></a>

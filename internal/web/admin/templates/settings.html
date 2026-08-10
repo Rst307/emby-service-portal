@@ -1,6 +1,8 @@
 {{define "settings"}}<!doctype html>
 <html lang="zh-CN">
-{{template "head" "设置 · Emby 账号管理"}}
+<head>
+  {{template "head" "设置 · Emby 账号管理"}}
+</head>
 <body>
   <main class="app-shell">
     {{template "admin-nav" (dict "active" "settings" "csrf" .CSRFToken)}}

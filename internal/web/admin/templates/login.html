@@ -6,11 +6,14 @@
 <body>
 <main class="auth-shell">
   <section class="auth-card">
-    <div class="brand"><span class="brand-mark">E</span>Emby 账号管理</div>
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">E</span>
+      <span class="brand-copy"><strong>Emby 账号管理</strong><small>ACCESS CONSOLE</small></span>
+    </div>
     <p class="eyebrow">管理后台</p>
     <h1 class="page-title">欢迎回来</h1>
     <p class="page-lead">登录后管理账号、邀请码与订阅状态。</p>
-    {{if .Error}}<p class="alert error">{{.Error}}</p>{{end}}
+    {{if .Error}}<p class="alert error" role="alert">{{.Error}}</p>{{end}}
     <form method="post" action="/admin/login">
       <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
       <label class="field">用户名
