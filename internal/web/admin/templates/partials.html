@@ -16,6 +16,7 @@
     <a {{if eq .active "dashboard"}}class="active" aria-current="page" {{end}}href="/admin/">控制台</a>
     <a {{if eq .active "accounts"}}class="active" aria-current="page" {{end}}href="/admin/accounts">账号</a>
     <a {{if eq .active "invites"}}class="active" aria-current="page" {{end}}href="/admin/invites">邀请码</a>
+    <a {{if eq .active "plans"}}class="active" aria-current="page" {{end}}href="/admin/plans">售卖方案</a>
     <a {{if eq .active "settings"}}class="active" aria-current="page" {{end}}href="/admin/settings">设置</a>
   </nav>
   <form class="logout-form" method="post" action="/admin/logout">

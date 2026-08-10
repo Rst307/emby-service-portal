@@ -27,7 +27,7 @@
       </label>
       <button class="btn-block" type="submit">立即注册</button>
     </form>
-    <p class="auth-foot">已有账号？ <a href="/login">登录用户中心</a> · <a href="/renew">使用邀请码续费</a></p>
+    <p class="auth-foot">已有账号？ <a href="/login">登录用户中心</a> · <a href="/purchase">购买激活码</a> · <a href="/renew">账号续费</a></p>
   </section>
 </main>
 </body>
@@ -48,8 +48,30 @@
     </div>
     <p class="eyebrow">邀请码续费</p>
     <h1 class="page-title">延长订阅时间</h1>
-    <p class="page-lead">续费将在现有到期日基础上增加邀请码对应时长。</p>
+    <p class="page-lead">选择付费续费方案，或使用已有邀请码；续费时长都会从当前到期时间继续累加。</p>
     {{if .Error}}<p class="alert error" role="alert">{{.Error}}</p>{{end}}
+    {{if .RenewalPlans}}
+    <div class="public-plan-list renewal-plan-list">
+      {{range .RenewalPlans}}
+      <form method="post" action="/renew/payment" class="public-plan-card">
+        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+        <input type="hidden" name="plan_id" value="{{.ID}}">
+        <div class="public-plan-copy">
+          <strong>{{.Name}}</strong>
+          <span>{{.DurationDays}} 天{{if .Note}} · {{.Note}}{{end}}</span>
+        </div>
+        <button type="submit"><span class="money-value">{{formatMoney .PriceFen}}</span><small>下一步 →</small></button>
+        <label class="field plan-account-field">用户名
+          <input name="username" autocomplete="username" placeholder="用于绑定续费账号" required>
+        </label>
+        <label class="field plan-account-field">账号密码
+          <input name="password" type="password" autocomplete="current-password" placeholder="付款前验证账号归属" required>
+        </label>
+      </form>
+      {{end}}
+    </div>
+    <div class="renewal-divider"><span>或使用已有邀请码</span></div>
+    {{end}}
     <form method="post" action="/renew">
       <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
       <label class="field">邀请码
@@ -82,7 +104,7 @@
     <p class="eyebrow">操作成功</p>
     <h1 class="page-title">已完成</h1>
     <p class="page-lead">{{.Message}}</p>
-    <p class="auth-foot"><a href="/">返回首页</a> · <a href="/register">注册账号</a> · <a href="/renew">账号续费</a></p>
+    <p class="auth-foot"><a href="/">返回首页</a> · <a href="/purchase">购买激活码</a> · <a href="/register">注册账号</a> · <a href="/renew">账号续费</a></p>
   </section>
 </main>
 </body>

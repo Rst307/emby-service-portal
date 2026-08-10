@@ -1,0 +1,182 @@
+{{define "plans"}}<!doctype html>
+<html lang="zh-CN">
+<head>
+  {{template "head" "售卖方案 · Emby 账号管理"}}
+</head>
+<body>
+<main class="app-shell">
+  {{template "admin-nav" (dict "active" "plans" "csrf" .CSRFToken)}}
+
+  <section class="page-heading">
+    <div>
+      <p class="eyebrow">商品目录</p>
+      <h1 class="page-title">售卖方案</h1>
+      <p class="page-lead">创建任意数量的激活码购买方案和订阅续费方案。下架只影响新订单，不改变历史订单。</p>
+    </div>
+  </section>
+
+  {{template "alerts" .}}
+
+  <section class="plan-create-grid">
+    <section class="panel">
+      <header class="panel-header">
+        <div>
+          <h2 class="panel-title">添加激活码方案</h2>
+          <p class="panel-copy">用户付款成功后，系统生成一个一次性激活码。</p>
+        </div>
+        <span class="section-kicker">ACTIVATION</span>
+      </header>
+      <div class="panel-body">
+        <form method="post" action="/admin/plans" class="stack-form">
+          <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+          <input type="hidden" name="kind" value="activation">
+          <div class="form-grid plan-form-grid">
+            <label class="field">方案名称
+              <input name="name" placeholder="例如：月度激活码" required>
+            </label>
+            <label class="field">天数
+              <input name="duration_days" type="number" min="1" max="3650" placeholder="30" required>
+            </label>
+            <label class="field">价格（元）
+              <input name="price" type="number" min="0.01" step="0.01" placeholder="9.90" required>
+            </label>
+          </div>
+          <label class="field">说明
+            <input name="note" placeholder="例如：注册新账号使用">
+          </label>
+          <div class="form-actions"><button type="submit">添加激活码方案</button></div>
+        </form>
+      </div>
+    </section>
+
+    <section class="panel">
+      <header class="panel-header">
+        <div>
+          <h2 class="panel-title">添加续费方案</h2>
+          <p class="panel-copy">用户付款成功后，时长从当前订阅到期时间继续累加。</p>
+        </div>
+        <span class="section-kicker">RENEWAL</span>
+      </header>
+      <div class="panel-body">
+        <form method="post" action="/admin/plans" class="stack-form">
+          <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+          <input type="hidden" name="kind" value="renewal">
+          <div class="form-grid plan-form-grid">
+            <label class="field">方案名称
+              <input name="name" placeholder="例如：季度续费" required>
+            </label>
+            <label class="field">天数
+              <input name="duration_days" type="number" min="1" max="3650" placeholder="90" required>
+            </label>
+            <label class="field">价格（元）
+              <input name="price" type="number" min="0.01" step="0.01" placeholder="24.90" required>
+            </label>
+          </div>
+          <label class="field">说明
+            <input name="note" placeholder="例如：已有账号续订使用">
+          </label>
+          <div class="form-actions"><button type="submit">添加续费方案</button></div>
+        </form>
+      </div>
+    </section>
+  </section>
+
+  <section class="panel data-panel">
+    <header class="panel-header">
+      <div>
+        <h2 class="panel-title">激活码方案</h2>
+        <p class="panel-copy">共 {{len .ActivationPlans}} 个方案。价格和天数会复制到订单快照，后续修改不影响已创建订单。</p>
+      </div>
+    </header>
+    <div class="table-wrap">
+      <table>
+        <caption class="sr-only">激活码购买方案</caption>
+        <thead><tr><th scope="col">方案</th><th scope="col">时长</th><th scope="col">价格</th><th scope="col">状态</th><th scope="col">说明</th><th scope="col" class="col-actions">操作</th></tr></thead>
+        <tbody>
+        {{range .ActivationPlans}}
+          <tr>
+            <td><strong>{{.Name}}</strong><br><span class="subtle">#{{.ID}}</span></td>
+            <td>{{.DurationDays}} 天</td>
+            <td><strong class="money-value">{{formatMoney .PriceFen}}</strong></td>
+            <td><span class="badge {{if .Enabled}}enabled{{else}}off{{end}}">{{if .Enabled}}销售中{{else}}已下架{{end}}</span></td>
+            <td class="cell-note">{{if .Note}}{{.Note}}{{else}}<span class="subtle">—</span>{{end}}</td>
+            <td>
+              <div class="actions plan-actions">
+                <form method="post" action="/admin/plans/{{.ID}}/toggle" class="inline">
+                  <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                  <input type="hidden" name="enabled" value="{{if .Enabled}}false{{else}}true{{end}}">
+                  <button class="secondary" type="submit">{{if .Enabled}}下架{{else}}上架{{end}}</button>
+                </form>
+                <details class="inline-edit">
+                  <summary>编辑</summary>
+                  <form method="post" action="/admin/plans/{{.ID}}/update" class="plan-edit-form">
+                    <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                    <label class="field">名称<input name="name" value="{{.Name}}" required></label>
+                    <label class="field">天数<input name="duration_days" type="number" min="1" max="3650" value="{{.DurationDays}}" required></label>
+                    <label class="field">价格<input name="price" type="number" min="0.01" step="0.01" value="{{formatPriceInput .PriceFen}}" required></label>
+                    <label class="field">说明<input name="note" value="{{.Note}}"></label>
+                    <button type="submit">保存</button>
+                  </form>
+                </details>
+              </div>
+            </td>
+          </tr>
+        {{else}}
+          <tr><td class="empty" colspan="6">还没有激活码方案。添加第一个方案后，用户就能购买激活码。</td></tr>
+        {{end}}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel data-panel">
+    <header class="panel-header">
+      <div>
+        <h2 class="panel-title">订阅续费方案</h2>
+        <p class="panel-copy">共 {{len .RenewalPlans}} 个方案。续费订单会绑定到付款时验证过的业务账号。</p>
+      </div>
+    </header>
+    <div class="table-wrap">
+      <table>
+        <caption class="sr-only">订阅续费方案</caption>
+        <thead><tr><th scope="col">方案</th><th scope="col">时长</th><th scope="col">价格</th><th scope="col">状态</th><th scope="col">说明</th><th scope="col" class="col-actions">操作</th></tr></thead>
+        <tbody>
+        {{range .RenewalPlans}}
+          <tr>
+            <td><strong>{{.Name}}</strong><br><span class="subtle">#{{.ID}}</span></td>
+            <td>{{.DurationDays}} 天</td>
+            <td><strong class="money-value">{{formatMoney .PriceFen}}</strong></td>
+            <td><span class="badge {{if .Enabled}}enabled{{else}}off{{end}}">{{if .Enabled}}销售中{{else}}已下架{{end}}</span></td>
+            <td class="cell-note">{{if .Note}}{{.Note}}{{else}}<span class="subtle">—</span>{{end}}</td>
+            <td>
+              <div class="actions plan-actions">
+                <form method="post" action="/admin/plans/{{.ID}}/toggle" class="inline">
+                  <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                  <input type="hidden" name="enabled" value="{{if .Enabled}}false{{else}}true{{end}}">
+                  <button class="secondary" type="submit">{{if .Enabled}}下架{{else}}上架{{end}}</button>
+                </form>
+                <details class="inline-edit">
+                  <summary>编辑</summary>
+                  <form method="post" action="/admin/plans/{{.ID}}/update" class="plan-edit-form">
+                    <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                    <label class="field">名称<input name="name" value="{{.Name}}" required></label>
+                    <label class="field">天数<input name="duration_days" type="number" min="1" max="3650" value="{{.DurationDays}}" required></label>
+                    <label class="field">价格<input name="price" type="number" min="0.01" step="0.01" value="{{formatPriceInput .PriceFen}}" required></label>
+                    <label class="field">说明<input name="note" value="{{.Note}}"></label>
+                    <button type="submit">保存</button>
+                  </form>
+                </details>
+              </div>
+            </td>
+          </tr>
+        {{else}}
+          <tr><td class="empty" colspan="6">还没有续费方案。添加第一个方案后，用户就能在线续订。</td></tr>
+        {{end}}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+</body>
+</html>
+{{end}}

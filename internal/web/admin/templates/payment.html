@@ -1,0 +1,44 @@
+{{define "payment"}}<!doctype html>
+<html lang="zh-CN">
+<head>
+  {{template "head" "微信支付 · Emby 服务"}}
+</head>
+<body>
+<main class="auth-shell payment-shell">
+  <section class="auth-card payment-card" data-payment-page data-payment-token="{{.PaymentOrder.PublicToken}}">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">E</span>
+      <span class="brand-copy"><strong>Emby 服务</strong><small>SECURE CHECKOUT</small></span>
+    </div>
+    <p class="eyebrow">微信支付</p>
+    <h1 class="page-title">{{.PaymentOrder.PlanName}}</h1>
+    <p class="page-lead">订单号：{{.PaymentOrder.MerchantOrderNo}}</p>
+    <div class="payment-amount">{{formatMoney .PaymentOrder.AmountFen}}</div>
+    <div class="payment-status-line">
+      <span class="badge payment-status-{{.PaymentOrder.PaymentStatus}}" data-payment-state>{{paymentStatusLabel .PaymentOrder.PaymentStatus}}</span>
+      <span class="subtle" data-payment-hint>请打开微信收银台完成付款。</span>
+    </div>
+    {{if .PaymentOrder.PaymentURL}}
+    <a class="payment-launch" data-payment-link href="{{.PaymentOrder.PaymentURL}}" target="_blank" rel="noopener">打开微信收银台 <span>↗</span></a>
+    {{else}}
+    <p class="alert error" role="alert">支付页面暂时不可用，请稍后刷新此页面。</p>
+    {{end}}
+    <div class="payment-result" data-payment-result{{if ne .PaymentOrder.FulfillmentStatus "completed"}} hidden{{end}}>
+      <p class="eyebrow">已完成</p>
+      {{if eq .PaymentOrder.Kind "activation"}}
+      <p class="payment-result-title">你的激活码</p>
+      <code class="activation-code" data-activation-code>{{.PaymentOrder.ActivationCode}}</code>
+      <button type="button" class="secondary" data-copy-activation>复制激活码</button>
+      <p class="subtle">请保存激活码，再前往注册页创建 Emby 用户。</p>
+      {{else}}
+      <p class="payment-result-title">续费已完成</p>
+      <p class="subtle">订阅时长已添加到账号 {{.PaymentOrder.AccountUsername}}。</p>
+      <a class="quick-link" href="/portal/">查看我的订阅 <span>返回用户中心 →</span></a>
+      {{end}}
+    </div>
+    <p class="auth-foot"><a href="/">返回首页</a> · <a href="/purchase">购买激活码</a> · <a href="/renew">返回续费</a></p>
+  </section>
+</main>
+</body>
+</html>
+{{end}}

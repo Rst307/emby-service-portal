@@ -1,0 +1,37 @@
+{{define "purchase"}}<!doctype html>
+<html lang="zh-CN">
+<head>
+  {{template "head" "购买激活码 · Emby 服务"}}
+</head>
+<body>
+<main class="auth-shell purchase-shell">
+  <section class="auth-card purchase-card">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">E</span>
+      <span class="brand-copy"><strong>Emby 服务</strong><small>ACTIVATION DESK</small></span>
+    </div>
+    <p class="eyebrow">购买激活码</p>
+    <h1 class="page-title">选择你的订阅时长</h1>
+    <p class="page-lead">付款成功后会生成一次性激活码，可用于注册 Emby 用户或之后续费。</p>
+    {{if .Error}}<p class="alert error" role="alert">{{.Error}}</p>{{end}}
+    <div class="public-plan-list">
+      {{range .ActivationPlans}}
+      <form method="post" action="/purchase" class="public-plan-card">
+        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+        <input type="hidden" name="plan_id" value="{{.ID}}">
+        <div class="public-plan-copy">
+          <strong>{{.Name}}</strong>
+          <span>{{.DurationDays}} 天{{if .Note}} · {{.Note}}{{end}}</span>
+        </div>
+        <button type="submit"><span class="money-value">{{formatMoney .PriceFen}}</span><small>购买 →</small></button>
+      </form>
+      {{else}}
+      <div class="empty public-empty">管理员尚未上架激活码方案。</div>
+      {{end}}
+    </div>
+    <p class="auth-foot"><a href="/">返回首页</a> · 已有账号？<a href="/renew">购买续费</a> · <a href="/login">登录用户中心</a></p>
+  </section>
+</main>
+</body>
+</html>
+{{end}}

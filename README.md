@@ -17,6 +17,8 @@
 - 业务账号乐观锁版本控制，避免续费、管理员操作和到期任务相互覆盖。
 - 内建登录、注册和续费限流；安全响应头、请求体限制、缓存保护。
 - 可配置的显示时区（默认上海，后台「设置」页随时切换），时间展示统一按所选时区转换，存储始终 UTC。
+- 对接 `wxpay-payment-center`：管理员可配置支付中心商户凭证，维护不限数量的激活码购买方案与订阅续费方案。
+- 支付成功后自动生成一次性激活码，或为已验证的 Emby 用户完成订阅续费；支付回调验签、订单金额快照和重复回调幂等处理均在本地完成。
 
 ## 快速开始
 
@@ -41,6 +43,19 @@ go run ./cmd/emby-user-manager
 - 邀请码注册：`/register`
 - 邀请码续费：`/renew`
 - 健康检查：`/healthz`
+- 激活码购买：`/purchase`
+- 订单支付页：`/payment/{token}`（由购买流程跳转）
+
+### 微信支付中心对接
+
+支付中心项目见 [wxpay-payment-center](https://github.com/Rst307/wxpay-payment-center)。先在支付中心管理员页面创建一个商户应用，并将返回的 `app_id`、`secret` 和本项目的回调地址配置到本项目管理员后台「设置 → 微信支付中心」：
+
+- 支付中心地址：支付中心的 HTTPS 根地址。
+- 应用 ID / Secret：支付中心商户应用凭证；Secret 在本地使用凭据主密钥加密保存，不会渲染到页面。
+- 回调地址：填写 `https://你的域名/webhooks/wxpay-payment-center`，并在支付中心应用中使用完全相同的地址。
+- 订单有效期：支付中心订单的有效分钟数，范围 1–1440。
+
+管理员在「售卖方案」页面分别添加激活码方案和订阅续费方案，可以添加任意数量。价格以人民币元填写，服务端以整数分保存；修改方案不会改变已创建订单的价格和天数快照。生产环境必须使用 HTTPS，支付回调不能依赖浏览器 Cookie 或 CSRF，而是依赖支付中心 HMAC 签名。
 
 ## 配置
 
@@ -89,6 +104,29 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
   go build -trimpath -buildvcs=false -ldflags='-s -w' \
   -o dist/emby-user-manager-linux-amd64 ./cmd/emby-user-manager
 ```
+
+### Docker 运行
+
+镜像为多阶段构建的静态二进制 + Alpine 运行层（含 CA 证书和 IANA 时区数据），以非 root 用户运行：
+
+```bash
+docker build -t emby-user-manager .
+docker run -d --name emby-user-manager \
+  -p 127.0.0.1:8081:8080 \
+  -e EUM_DATABASE_PATH=/data/emby-user-manager.db \
+  -e EUM_EMBY_BASE_URL=https://emby.example.com/emby \
+  -e EUM_EMBY_API_KEY=... \
+  -e EUM_API_KEY=... \
+  -e EUM_CREDENTIAL_MASTER_KEY=... \
+  -e EUM_ADMIN_USERNAME=admin \
+  -e EUM_ADMIN_PASSWORD=... \
+  -v eum-data:/data \
+  emby-user-manager
+```
+
+数据库放在挂载卷 `/data` 下以便备份；同样建议只暴露到本机反向代理。
+
+### systemd 部署
 
 将二进制、`.env` 和 `scripts/install-linux-service.sh` 放到服务器。脚本会创建专用非 root 用户、保护数据库目录并安装 systemd 沙箱：
 
@@ -145,10 +183,13 @@ sudo journalctl -u emby-user-manager -f
 ## 开发与质量检查
 
 ```bash
-gofmt -w $(git ls-files '*.go')
-go test ./...
-go vet ./...
-go test -race ./...
+make fmt      # 格式化
+make test     # 单元与验收测试
+make vet      # 静态检查
+make race     # 竞态检测
+make check    # 完整质量门禁（等价 CI 前四步）
+make build    # 本机二进制
+make linux    # 静态 Linux amd64 二进制
 ```
 
 GitHub Actions 会运行格式检查、依赖校验、测试、race 检测、覆盖率、`staticcheck`、`govulncheck`，并上传可下载的 Linux amd64 构建产物。
@@ -156,19 +197,39 @@ GitHub Actions 会运行格式检查、依赖校验、测试、race 检测、覆
 ## 项目结构
 
 ```text
-cmd/                    程序入口
-internal/accounts/      业务账号生命周期与注册 Saga
-internal/auth/          管理员认证与会话
-internal/credentials/   加密凭据 Vault
-internal/emby/          Emby HTTP 客户端
-internal/expiry/        到期和 Emby 同步 worker
-internal/invites/       邀请码及兑换
-internal/persistence/   SQLite 迁移与存储
-internal/web/           Web 页面、API 和静态资源
-scripts/                安装脚本
-docs/                   API 文档
+cmd/emby-user-manager/    程序入口
+internal/
+├── app/                  模块装配（组合根）
+├── accounts/             业务账号生命周期与注册 Saga
+├── auth/                 管理员认证与会话
+├── config/               环境变量配置
+├── credentials/          加密凭据 Vault
+├── emby/                 Emby HTTP 客户端
+├── expiry/               到期和 Emby 同步 worker
+├── invites/              邀请码及兑换
+├── persistence/sqlite/   SQLite 连接、迁移与按领域拆分的存储
+│   ├── sqlite.go         连接/迁移/共享工具（outbox 写入）
+│   ├── types.go          领域模型与错误
+│   ├── admins.go         管理员、会话与设置
+│   ├── accounts.go       业务账号存取与乐观锁
+│   ├── saga.go           创建/注册持久化 Saga
+│   ├── invites.go        邀请码与兑换
+│   └── sync.go           Emby 访问同步 outbox
+├── portal/               用户中心
+├── ratelimit/            登录/注册/续费限流
+├── settings/             显示时区设置
+└── web/                  HTTP 层
+    ├── web.go            Server、路由、中间件与共享助手
+    ├── api.go            REST API（/api/v1/*）
+    ├── admin.go          管理后台页面（/admin/*）
+    ├── portal.go         用户中心与公开页（/portal/*、/register、/renew）
+    └── admin/            后台 HTML 模板
+scripts/                  安装脚本
+docs/                     API 文档与架构决策
+Dockerfile                多阶段容器构建
+Makefile                  常用开发命令
 ```
 
 ## 许可证
 
-尚未指定许可证；在公开分发前请补充适合项目的 `LICENSE` 文件。
+[MIT](LICENSE)。

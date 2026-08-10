@@ -111,6 +111,42 @@ func TestRenderStatusUsesRequestedStatusAfterSuccessfulExecution(t *testing.T) {
 	}
 }
 
+func TestRenderPlansShowsBothSaleKinds(t *testing.T) {
+	templates, err := NewTemplates(time.UTC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	templates.Render(response, "plans", ViewData{
+		ActivationPlans: []sqlite.PaymentPlan{{ID: 1, Kind: "activation", Name: "月卡激活", DurationDays: 30, PriceFen: 990, Enabled: true}},
+		RenewalPlans:    []sqlite.PaymentPlan{{ID: 2, Kind: "renewal", Name: "季度续费", DurationDays: 90, PriceFen: 2490, Enabled: false}},
+	})
+	page := response.Body.String()
+	for _, marker := range []string{"售卖方案", "月卡激活", "¥9.90", "季度续费", "¥24.90", "已下架", "/admin/plans/2/toggle"} {
+		if !strings.Contains(page, marker) {
+			t.Fatalf("plans page missing %q: %s", marker, page)
+		}
+	}
+}
+
+func TestRenderPaymentShowsCheckoutAndActivationCode(t *testing.T) {
+	templates, err := NewTemplates(time.UTC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	templates.Render(response, "payment", ViewData{PaymentOrder: sqlite.PaymentOrder{
+		PublicToken: "token", MerchantOrderNo: "EUM-ORDER-1", Kind: "activation", PlanName: "月卡", AmountFen: 990,
+		PaymentStatus: "paid", FulfillmentStatus: "completed", PaymentURL: "https://pay.example/checkout", ActivationCode: "EUM-ACT-test",
+	}})
+	page := response.Body.String()
+	for _, marker := range []string{"微信支付", "¥9.90", "打开微信收银台", "EUM-ACT-test", "data-payment-page", "data-payment-token=\"token\""} {
+		if !strings.Contains(page, marker) {
+			t.Fatalf("payment page missing %q: %s", marker, page)
+		}
+	}
+}
+
 func TestRenderSettingsShowsSelectedTimeZone(t *testing.T) {
 	templates, err := NewTemplates(time.UTC)
 	if err != nil {

@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/emby-user-manager/emby-user-manager/internal/payments"
 	"github.com/emby-user-manager/emby-user-manager/internal/persistence/sqlite"
 )
 
@@ -31,6 +32,10 @@ type ViewData struct {
 	TimeZone        string
 	TimeZoneNow     string
 	TimeZoneOptions []TimeZoneOption
+	PaymentSettings payments.PaymentSettings
+	ActivationPlans []sqlite.PaymentPlan
+	RenewalPlans    []sqlite.PaymentPlan
+	PaymentOrder    sqlite.PaymentOrder
 }
 
 // TimeZoneOption is a selectable time zone for the settings page.
@@ -76,6 +81,43 @@ func NewTemplates(location *time.Location) (*Templates, error) {
 				return fmt.Sprintf("%d 小时", minutes/60)
 			default:
 				return fmt.Sprintf("%d 分钟", minutes)
+			}
+		},
+		"formatMoney": func(fen int) string {
+			if fen < 0 {
+				return "¥-" + fmt.Sprintf("%d.%02d", (-fen)/100, (-fen)%100)
+			}
+			return fmt.Sprintf("¥%d.%02d", fen/100, fen%100)
+		},
+		"formatPriceInput": func(fen int) string {
+			if fen < 0 {
+				return fmt.Sprintf("-%d.%02d", (-fen)/100, (-fen)%100)
+			}
+			return fmt.Sprintf("%d.%02d", fen/100, fen%100)
+		},
+		"planKindLabel": func(kind string) string {
+			if kind == "activation" {
+				return "激活码"
+			}
+			if kind == "renewal" {
+				return "订阅续费"
+			}
+			return kind
+		},
+		"paymentStatusLabel": func(status string) string {
+			switch status {
+			case "pending":
+				return "等待付款"
+			case "paid":
+				return "已付款"
+			case "expired":
+				return "已过期"
+			case "canceled":
+				return "已取消"
+			case "failed":
+				return "处理失败"
+			default:
+				return status
 			}
 		},
 		"dict": func(values ...any) (map[string]any, error) {

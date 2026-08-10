@@ -11,7 +11,7 @@
       <div>
         <p class="eyebrow">系统</p>
         <h1 class="page-title">设置</h1>
-        <p class="page-lead">管理系统的运行参数。</p>
+        <p class="page-lead">管理显示时区与微信支付连接。支付密钥会在保存前加密。</p>
       </div>
     </section>
 
@@ -21,7 +21,7 @@
       <header class="panel-header">
         <div>
           <h2 class="panel-title">显示时区</h2>
-          <p class="panel-copy">所有页面（后台、用户中心、注册 / 续费页）展示的时间都会按所选时区转换；数据库和 API 始终以 UTC 保存。</p>
+          <p class="panel-copy">所有页面展示的时间都会按所选时区转换；数据库和 API 始终以 UTC 保存。</p>
         </div>
       </header>
       <div class="panel-body">
@@ -43,6 +43,42 @@
           <p class="subtle">当前显示时区：{{.TimeZone}}（本地时间 {{.TimeZoneNow}}）。</p>
           <div class="form-actions">
             <button type="submit">保存设置</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <section class="panel payment-settings-panel">
+      <header class="panel-header">
+        <div>
+          <h2 class="panel-title">微信支付中心</h2>
+          <p class="panel-copy">对接 <code>wxpay-payment-center</code> 的商户接口。先在支付中心创建应用，再把 app_id、secret 和回调地址填入这里。</p>
+        </div>
+        {{if .PaymentSettings.Configured}}<span class="badge enabled">已配置</span>{{else}}<span class="badge off">未配置</span>{{end}}
+      </header>
+      <div class="panel-body">
+        <form method="post" action="/admin/settings/payment" class="stack-form">
+          <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+          <div class="form-grid payment-config-grid">
+            <label class="field">支付中心地址
+              <input name="base_url" type="url" value="{{.PaymentSettings.BaseURL}}" placeholder="例如：https://pay.example.com" autocomplete="url">
+            </label>
+            <label class="field">应用 ID
+              <input name="app_id" value="{{.PaymentSettings.AppID}}" placeholder="例如：app_xxx" autocomplete="off">
+            </label>
+            <label class="field">应用 Secret{{if .PaymentSettings.SecretConfigured}}（已保存）{{end}}
+              <input name="app_secret" type="password" placeholder="留空保持当前密钥" autocomplete="new-password">
+            </label>
+            <label class="field">订单有效期（分钟）
+              <input name="order_ttl_minutes" type="number" min="1" max="1440" value="{{if .PaymentSettings.OrderTTLMinutes}}{{.PaymentSettings.OrderTTLMinutes}}{{else}}15{{end}}" required>
+            </label>
+          </div>
+          <label class="field">支付回调地址
+            <input name="callback_url" type="url" value="{{.PaymentSettings.CallbackURL}}" placeholder="例如：https://emby.example.com/webhooks/wxpay-payment-center" autocomplete="url">
+          </label>
+          <p class="subtle">将这个回调地址原样填入支付中心应用设置。生产环境必须使用 HTTPS；本地联调可使用 localhost HTTP。</p>
+          <div class="form-actions">
+            <button type="submit">保存支付设置</button>
           </div>
         </form>
       </div>

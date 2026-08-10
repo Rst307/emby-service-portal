@@ -134,14 +134,29 @@ func (s *Service) consume(ctx context.Context, code string, now time.Time) (sqli
 	}
 	return invite, nil
 }
-func newCode() (string, error) {
+func newCode() (string, error) { return NewCode("EUM-") }
+
+// NewActivationCode creates a paid activation code without persisting it. The
+// payment fulfillment transaction owns persistence, so a retry cannot create a
+// second code after a partially completed callback.
+func NewActivationCode() (string, error) { return NewCode("EUM-ACT-") }
+
+// NewCode creates a random redeemable code with the supplied prefix.
+func NewCode(prefix string) (string, error) {
+	if prefix == "" {
+		return "", errors.New("code prefix is required")
+	}
 	bytes := make([]byte, 18)
 	if _, err := rand.Read(bytes); err != nil {
 		return "", err
 	}
-	return "EUM-" + base64.RawURLEncoding.EncodeToString(bytes), nil
+	return prefix + base64.RawURLEncoding.EncodeToString(bytes), nil
 }
-func hash(value string) string {
+
+func hash(value string) string { return HashCode(value) }
+
+// HashCode returns the one-way representation used by the invite store.
+func HashCode(value string) string {
 	digest := sha256.Sum256([]byte(value))
 	return base64.RawURLEncoding.EncodeToString(digest[:])
 }

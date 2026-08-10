@@ -46,6 +46,9 @@ func main() {
 			if err := application.RunExpiry(workerContext); err != nil && !errors.Is(err, context.Canceled) {
 				log.Printf("run expiry scan: %v", err)
 			}
+			if err := application.RunPayments(workerContext); err != nil && !errors.Is(err, context.Canceled) {
+				log.Printf("reconcile payment orders: %v", err)
+			}
 			select {
 			case <-workerContext.Done():
 				return

@@ -212,3 +212,90 @@ document.addEventListener("submit", (event) => {
   updateVisibility();
   updateSelection();
 })();
+
+/* ============================================================
+   支付订单状态轮询与激活码复制
+   ============================================================ */
+
+(() => {
+  const page = document.querySelector("[data-payment-page]");
+  if (!page) return;
+
+  const token = page.dataset.paymentToken;
+  const state = page.querySelector("[data-payment-state]");
+  const hint = page.querySelector("[data-payment-hint]");
+  const result = page.querySelector("[data-payment-result]");
+  const code = page.querySelector("[data-activation-code]");
+  const paymentLink = page.querySelector("[data-payment-link]");
+  const copyButton = page.querySelector("[data-copy-activation]");
+  let completed = false;
+
+  const labels = {
+    pending: "等待付款",
+    paid: "已付款，正在发放",
+    expired: "订单已过期",
+    canceled: "订单已取消",
+    failed: "处理失败",
+  };
+
+  const render = (payload) => {
+    const paymentStatus = payload.status || "pending";
+    const fulfillmentStatus = payload.fulfillment_status || "pending";
+    if (state) {
+      state.textContent = labels[paymentStatus] || paymentStatus;
+      state.className = "badge payment-status-" + paymentStatus;
+    }
+    if (hint) {
+      hint.textContent = paymentStatus === "pending" ? "请打开微信收银台完成付款。" :
+        paymentStatus === "paid" && fulfillmentStatus !== "completed" ? "款项已确认，正在生成权益。" :
+        paymentStatus === "expired" ? "订单已过期，请重新选择方案。" : "";
+    }
+    if (paymentLink) paymentLink.hidden = paymentStatus !== "pending";
+    if (fulfillmentStatus === "completed") {
+      completed = true;
+      if (result) result.hidden = false;
+      if (code && payload.activation_code) code.textContent = payload.activation_code;
+    }
+  };
+
+  const poll = async () => {
+    try {
+      const response = await fetch("/payment/" + encodeURIComponent(token) + "/status", { cache: "no-store" });
+      if (!response.ok) return;
+      render(await response.json());
+    } catch (_) {
+      // The next poll can recover from a transient network failure.
+    }
+  };
+
+  if (copyButton && code) {
+    copyButton.addEventListener("click", async () => {
+      const value = code.textContent.trim();
+      if (!value) return;
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(value);
+        } else {
+          const input = document.createElement("textarea");
+          input.value = value;
+          input.style.position = "fixed";
+          input.style.opacity = "0";
+          document.body.appendChild(input);
+          input.select();
+          document.execCommand("copy");
+          input.remove();
+        }
+        copyButton.textContent = "已复制";
+        window.setTimeout(() => { copyButton.textContent = "复制激活码"; }, 1500);
+      } catch (_) {
+        copyButton.textContent = "请手动复制";
+      }
+    });
+  }
+
+  poll();
+  const interval = window.setInterval(() => {
+    if (!completed) poll();
+    else window.clearInterval(interval);
+  }, 2500);
+})();

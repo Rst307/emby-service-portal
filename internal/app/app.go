@@ -13,6 +13,8 @@ import (
 	"github.com/emby-user-manager/emby-user-manager/internal/emby"
 	"github.com/emby-user-manager/emby-user-manager/internal/expiry"
 	"github.com/emby-user-manager/emby-user-manager/internal/invites"
+	"github.com/emby-user-manager/emby-user-manager/internal/paymentcenter"
+	"github.com/emby-user-manager/emby-user-manager/internal/payments"
 	"github.com/emby-user-manager/emby-user-manager/internal/persistence/sqlite"
 	"github.com/emby-user-manager/emby-user-manager/internal/portal"
 	"github.com/emby-user-manager/emby-user-manager/internal/settings"
@@ -25,6 +27,7 @@ type Application struct {
 	Emby     emby.Client
 	expiry   *expiry.Runner
 	accounts *accounts.Service
+	payments *payments.Service
 }
 
 func New(ctx context.Context, cfg config.Config) (*Application, error) {
@@ -44,8 +47,10 @@ func New(ctx context.Context, cfg config.Config) (*Application, error) {
 	if err != nil {
 		return closeOnError(fmt.Errorf("configure Emby client: %w", err))
 	}
-	accountService := accounts.New(store, embyClient, credentials.New(cfg.CredentialMasterKey, cfg.CredentialPreviousKey, cfg.APIKey))
+	vault := credentials.New(cfg.CredentialMasterKey, cfg.CredentialPreviousKey, cfg.APIKey)
+	accountService := accounts.New(store, embyClient, vault)
 	inviteService := invites.New(store, accountService)
+	paymentService := payments.New(store, accountService, vault, paymentcenter.NewClient(nil))
 	portalService := portal.New(store, embyClient, cfg.SessionTTL)
 	timeLocation, err := cfg.TimeLocation()
 	if err != nil {
@@ -55,11 +60,11 @@ func New(ctx context.Context, cfg config.Config) (*Application, error) {
 	if err := settingsService.Ensure(ctx); err != nil {
 		return closeOnError(fmt.Errorf("seed settings: %w", err))
 	}
-	webServer, err := web.New(authService, portalService, accountService, inviteService, settingsService, cfg.APIKey, cfg.CookieSecure, cfg.SessionTTL, timeLocation)
+	webServer, err := web.New(authService, portalService, accountService, inviteService, paymentService, settingsService, cfg.APIKey, cfg.CookieSecure, cfg.SessionTTL, timeLocation)
 	if err != nil {
 		return closeOnError(fmt.Errorf("configure web server: %w", err))
 	}
-	return &Application{store: store, handler: webServer.Handler(), Emby: embyClient, expiry: expiry.New(store, embyClient), accounts: accountService}, nil
+	return &Application{store: store, handler: webServer.Handler(), Emby: embyClient, expiry: expiry.New(store, embyClient), accounts: accountService, payments: paymentService}, nil
 }
 
 func (a *Application) Handler() http.Handler               { return a.handler }
@@ -67,4 +72,5 @@ func (a *Application) RunExpiry(ctx context.Context) error { return a.expiry.Run
 func (a *Application) RunProvisioningRecovery(ctx context.Context) error {
 	return a.accounts.RecoverAccountCreates(ctx)
 }
-func (a *Application) Close() error { return a.store.Close() }
+func (a *Application) RunPayments(ctx context.Context) error { return a.payments.Reconcile(ctx) }
+func (a *Application) Close() error                          { return a.store.Close() }
