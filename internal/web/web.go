@@ -257,6 +257,14 @@ func newCSRFToken() (string, error) {
 	}
 	return base64.RawURLEncoding.EncodeToString(bytes), nil
 }
+
+func newCSPNonce() (string, error) {
+	bytes := make([]byte, 16)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(bytes), nil
+}
 func csrfFromRequest(r *http.Request) string {
 	cookie, err := r.Cookie(csrfCookie)
 	if err != nil {
@@ -279,11 +287,16 @@ func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// HTML pages contain session-scoped state, CSRF tokens, or account data.
 		// Static asset handlers deliberately override this with their own cache policy.
+		nonce, err := newCSPNonce()
+		if err != nil {
+			http.Error(w, "security policy unavailable", http.StatusInternalServerError)
+			return
+		}
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "same-origin")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'nonce-"+nonce+"' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://cloudflareinsights.com; img-src 'self' data:")
 		next.ServeHTTP(w, r)
 	})
 }

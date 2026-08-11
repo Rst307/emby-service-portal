@@ -1,9 +1,35 @@
 package web
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
+
+func TestSecurityHeadersProvideCloudflareCompatibleScriptPolicy(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	response := httptest.NewRecorder()
+	securityHeaders(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})).ServeHTTP(response, request)
+
+	policy := response.Header().Get("Content-Security-Policy")
+	if !strings.Contains(policy, "script-src 'self' 'nonce-") {
+		t.Fatalf("CSP does not provide a per-response script nonce: %q", policy)
+	}
+	if !strings.Contains(policy, "https://static.cloudflareinsights.com") {
+		t.Fatalf("CSP does not allow the Cloudflare Web Analytics script: %q", policy)
+	}
+	if !strings.Contains(policy, "connect-src 'self' https://cloudflareinsights.com") {
+		t.Fatalf("CSP does not allow the Cloudflare analytics endpoint: %q", policy)
+	}
+	scriptPolicy := strings.SplitN(strings.SplitN(policy, "script-src ", 2)[1], ";", 2)[0]
+	if strings.Contains(scriptPolicy, "'unsafe-inline'") {
+		t.Fatalf("CSP weakens script policy with unsafe-inline: %q", policy)
+	}
+}
 
 func TestParseAccountDateTimePreservesAmbiguousOriginalInstant(t *testing.T) {
 	location, err := time.LoadLocation("America/New_York")
