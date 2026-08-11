@@ -80,6 +80,7 @@ type CreateOrderInput struct {
 	Currency         string
 	Subject          string
 	ExpiresInSeconds int
+	Note             string
 	ReturnURL        string
 }
 
@@ -117,8 +118,9 @@ func (c *Client) CreateOrder(ctx context.Context, cfg Config, input CreateOrderI
 		Currency         string `json:"currency"`
 		Subject          string `json:"subject"`
 		ExpiresInSeconds int    `json:"expires_in_seconds"`
+		Note             string `json:"note,omitempty"`
 		ReturnURL        string `json:"return_url,omitempty"`
-	}{input.MerchantOrderNo, input.AmountFen, input.Currency, input.Subject, input.ExpiresInSeconds, input.ReturnURL}
+	}{input.MerchantOrderNo, input.AmountFen, input.Currency, input.Subject, input.ExpiresInSeconds, input.Note, input.ReturnURL}
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return Order{}, fmt.Errorf("marshal payment order: %w", err)
@@ -134,21 +136,85 @@ func (c *Client) QueryOrder(ctx context.Context, cfg Config, merchantOrderNo str
 	return c.doOrder(ctx, cfg, http.MethodGet, path, nil)
 }
 
+func (c *Client) CancelOrder(ctx context.Context, cfg Config, merchantOrderNo string) (Order, error) {
+	if err := cfg.Validate(); err != nil {
+		return Order{}, err
+	}
+	path := "/v1/orders/" + url.PathEscape(merchantOrderNo) + "/cancel"
+	return c.doOrder(ctx, cfg, http.MethodPost, path, nil)
+}
+
+// ListOrders returns the newest orders belonging to the configured merchant
+// application. The query string is deliberately excluded from the signature
+// path, as required by R Pay's merchant protocol.
+func (c *Client) ListOrders(ctx context.Context, cfg Config, limit int, status string) ([]Order, error) {
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 200 {
+		return nil, fmt.Errorf("payment center order list limit must be between 1 and 200")
+	}
+	status = strings.ToUpper(strings.TrimSpace(status))
+	if status == "CANCELLED" {
+		status = "CANCELED"
+	}
+	if status != "" && status != "PENDING" && status != "PAID" && status != "CANCELED" && status != "EXPIRED" {
+		return nil, fmt.Errorf("unsupported payment center order status %q", status)
+	}
+	query := url.Values{"limit": []string{strconv.Itoa(limit)}}
+	if status != "" {
+		query.Set("status", status)
+	}
+	requestPath := "/v1/orders?" + query.Encode()
+	responseBody, err := c.doRequest(ctx, cfg, http.MethodGet, "/v1/orders", requestPath, nil)
+	if err != nil {
+		return nil, err
+	}
+	var orders []Order
+	if err := json.Unmarshal(responseBody, &orders); err != nil {
+		return nil, fmt.Errorf("decode payment center order list: %w", err)
+	}
+	for _, order := range orders {
+		if err := validateOrder(order); err != nil {
+			return nil, err
+		}
+	}
+	return orders, nil
+}
+
 func (c *Client) doOrder(ctx context.Context, cfg Config, method, path string, body []byte) (Order, error) {
-	timestamp := strconv.FormatInt(c.clock().Unix(), 10)
-	nonce, err := newNonce()
+	responseBody, err := c.doRequest(ctx, cfg, method, path, path, body)
 	if err != nil {
 		return Order{}, err
 	}
-	signature := signRequest(cfg.AppSecret, method, path, timestamp, nonce, body)
-	target := strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/") + path
+	var order Order
+	if err := json.Unmarshal(responseBody, &order); err != nil {
+		return Order{}, fmt.Errorf("decode payment center response: %w", err)
+	}
+	if err := validateOrder(order); err != nil {
+		return Order{}, err
+	}
+	return order, nil
+}
+
+func (c *Client) doRequest(ctx context.Context, cfg Config, method, signedPath, requestPath string, body []byte) ([]byte, error) {
+	timestamp := strconv.FormatInt(c.clock().Unix(), 10)
+	nonce, err := newNonce()
+	if err != nil {
+		return nil, err
+	}
+	signature := signRequest(cfg.AppSecret, method, signedPath, timestamp, nonce, body)
+	target := strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/") + requestPath
 	var requestBody io.Reader
 	if body != nil {
 		requestBody = bytes.NewReader(body)
 	}
 	request, err := http.NewRequestWithContext(ctx, method, target, requestBody)
 	if err != nil {
-		return Order{}, fmt.Errorf("build payment-center request: %w", err)
+		return nil, fmt.Errorf("build payment-center request: %w", err)
 	}
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("X-Pay-App-Id", cfg.AppID)
@@ -160,24 +226,24 @@ func (c *Client) doOrder(ctx context.Context, cfg Config, method, path string, b
 	}
 	response, err := c.HTTP.Do(request)
 	if err != nil {
-		return Order{}, fmt.Errorf("call payment center: %w", err)
+		return nil, fmt.Errorf("call payment center: %w", err)
 	}
 	defer response.Body.Close()
 	responseBody, err := io.ReadAll(io.LimitReader(response.Body, 1<<20))
 	if err != nil {
-		return Order{}, fmt.Errorf("read payment center response: %w", err)
+		return nil, fmt.Errorf("read payment center response: %w", err)
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return Order{}, fmt.Errorf("payment center returned HTTP %d: %s", response.StatusCode, providerMessage(responseBody))
+		return nil, fmt.Errorf("payment center returned HTTP %d: %s", response.StatusCode, providerMessage(responseBody))
 	}
-	var order Order
-	if err := json.Unmarshal(responseBody, &order); err != nil {
-		return Order{}, fmt.Errorf("decode payment center response: %w", err)
-	}
+	return responseBody, nil
+}
+
+func validateOrder(order Order) error {
 	if order.MerchantOrderNo == "" || order.AmountFen < 1 || order.Currency == "" || order.Status == "" {
-		return Order{}, fmt.Errorf("payment center returned an incomplete order")
+		return fmt.Errorf("payment center returned an incomplete order")
 	}
-	return order, nil
+	return nil
 }
 
 func providerMessage(body []byte) string {

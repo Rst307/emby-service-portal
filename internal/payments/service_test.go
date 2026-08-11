@@ -29,10 +29,14 @@ func TestActivationOrderIsFulfilledFromVerifiedPaymentCenterCallback(t *testing.
 		}
 		body, _ := io.ReadAll(r.Body)
 		var request struct {
+			Note      string `json:"note"`
 			ReturnURL string `json:"return_url"`
 		}
 		if err := json.Unmarshal(body, &request); err != nil {
 			t.Fatalf("decode provider request: %v", err)
+		}
+		if request.Note != "购买人：张三 / wx-z3" {
+			t.Fatalf("provider note = %q", request.Note)
 		}
 		if !strings.HasPrefix(request.ReturnURL, "https://user.example/payment/") || !strings.Contains(request.ReturnURL, "order=EUM-") || strings.Contains(request.ReturnURL, "{") {
 			t.Fatalf("return_url = %q", request.ReturnURL)
@@ -61,7 +65,7 @@ func TestActivationOrderIsFulfilledFromVerifiedPaymentCenterCallback(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	order, err := service.CreateActivationOrder(ctx, plan.ID)
+	order, err := service.CreateActivationOrder(ctx, plan.ID, "张三 / wx-z3")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,6 +92,65 @@ func TestActivationOrderIsFulfilledFromVerifiedPaymentCenterCallback(t *testing.
 	}
 	if err := service.HandleWebhook(ctx, headers, body); err != nil {
 		t.Fatal("duplicate callback: ", err)
+	}
+}
+
+func TestReconcileCancelsLocallyExpiredRPayOrder(t *testing.T) {
+	ctx := context.Background()
+	start := time.Date(2026, 8, 10, 12, 0, 0, 0, time.UTC)
+	current := start
+	secret := "test-payment-center-secret-123"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/orders" && r.Method == http.MethodPost {
+			body, _ := io.ReadAll(r.Body)
+			_, _ = w.Write([]byte(`{"merchant_order_no":"` + merchantOrderFromBody(body) + `","amount_fen":990,"currency":"CNY","subject":"月卡","status":"PENDING","payment_memo":"PCABC123","payment_url":"https://pay.example/checkout","expires_at":"2026-08-10T12:15:00+00:00"}`))
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/cancel") && r.Method == http.MethodPost {
+			merchantNo := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/v1/orders/"), "/cancel")
+			_, _ = w.Write([]byte(`{"merchant_order_no":"` + merchantNo + `","amount_fen":990,"currency":"CNY","subject":"月卡","status":"CANCELED","payment_memo":"PCABC123","payment_url":"https://pay.example/checkout"}`))
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/v1/orders/") && r.Method == http.MethodGet {
+			merchantNo := strings.TrimPrefix(r.URL.Path, "/v1/orders/")
+			_, _ = w.Write([]byte(`{"merchant_order_no":"` + merchantNo + `","amount_fen":990,"currency":"CNY","subject":"月卡","status":"PENDING","payment_memo":"PCABC123","payment_url":"https://pay.example/checkout"}`))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	store, err := sqlite.Open(ctx, t.TempDir()+"/manager.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	vault := credentials.New("test-credential-master-key-that-is-long-enough")
+	center := paymentcenter.NewClient(server.Client())
+	center.Now = func() time.Time { return current }
+	service := New(store, nil, vault, center)
+	service.now = func() time.Time { return current }
+	if err := service.UpdateSettings(ctx, UpdatePaymentSettingsInput{BaseURL: server.URL, AppID: "app_test", AppSecret: secret, CallbackURL: "http://127.0.0.1/webhooks/wxpay-payment-center", OrderTTLMinutes: 15}); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := service.CreatePlan(ctx, sqlite.CreatePaymentPlanInput{Kind: KindActivation, Name: "月卡", DurationDays: 30, PriceFen: 990})
+	if err != nil {
+		t.Fatal(err)
+	}
+	order, err := service.CreateActivationOrder(ctx, plan.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current = start.Add(20 * time.Minute)
+	if err := service.Reconcile(ctx); err != nil {
+		t.Fatal(err)
+	}
+	order, err = service.PublicOrder(ctx, order.PublicToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if order.PaymentStatus != "canceled" || order.ProviderStatus != "CANCELED" {
+		t.Fatalf("order after reconciliation = %+v", order)
 	}
 }
 

@@ -32,7 +32,7 @@ func TestCreateOrderSignsExactRequestBody(t *testing.T) {
 		if err := json.Unmarshal(body, &payload); err != nil {
 			t.Fatal(err)
 		}
-		if payload["amount_fen"] != float64(990) || payload["merchant_order_no"] != "EUM-TEST-1" || payload["return_url"] != "https://user.example/payment/token" {
+		if payload["amount_fen"] != float64(990) || payload["merchant_order_no"] != "EUM-TEST-1" || payload["note"] != "购买人：张三" || payload["return_url"] != "https://user.example/payment/token" {
 			t.Fatalf("payload = %s", body)
 		}
 		_, _ = w.Write([]byte(`{"merchant_order_no":"EUM-TEST-1","amount_fen":990,"currency":"CNY","subject":"月卡","status":"PENDING","payment_memo":"PCABC123","payment_url":"https://pay.test/pay/abc","expires_at":"2026-08-10T12:15:00+00:00"}`))
@@ -41,12 +41,70 @@ func TestCreateOrderSignsExactRequestBody(t *testing.T) {
 
 	client := NewClient(server.Client())
 	client.Now = func() time.Time { return fixed }
-	order, err := client.CreateOrder(context.Background(), Config{BaseURL: server.URL, AppID: "app_test", AppSecret: secret}, CreateOrderInput{MerchantOrderNo: "EUM-TEST-1", AmountFen: 990, Currency: "CNY", Subject: "月卡", ExpiresInSeconds: 900, ReturnURL: "https://user.example/payment/token"})
+	order, err := client.CreateOrder(context.Background(), Config{BaseURL: server.URL, AppID: "app_test", AppSecret: secret}, CreateOrderInput{MerchantOrderNo: "EUM-TEST-1", AmountFen: 990, Currency: "CNY", Subject: "月卡", ExpiresInSeconds: 900, Note: "购买人：张三", ReturnURL: "https://user.example/payment/token"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if order.PaymentURL != "https://pay.test/pay/abc" || order.Status != "PENDING" {
 		t.Fatalf("order = %+v", order)
+	}
+}
+
+func TestListOrdersSignsPathWithoutQuery(t *testing.T) {
+	secret := "test-payment-center-secret-123"
+	fixed := time.Unix(1_786_360_000, 0)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if r.Method != http.MethodGet || r.URL.Path != "/v1/orders" || r.URL.Query().Get("limit") != "25" || r.URL.Query().Get("status") != "PAID" || len(body) != 0 {
+			t.Fatalf("request = %s %s?%s body=%q", r.Method, r.URL.Path, r.URL.RawQuery, body)
+		}
+		if got := signRequest(secret, r.Method, "/v1/orders", r.Header.Get("X-Pay-Timestamp"), r.Header.Get("X-Pay-Nonce"), body); got != r.Header.Get("X-Pay-Signature") {
+			t.Fatalf("signature mismatch: computed %q, header %q", got, r.Header.Get("X-Pay-Signature"))
+		}
+		_, _ = w.Write([]byte(`[{"merchant_order_no":"EUM-TEST-1","amount_fen":990,"currency":"CNY","subject":"月卡","status":"PAID"}]`))
+	}))
+	defer server.Close()
+
+	client := NewClient(server.Client())
+	client.Now = func() time.Time { return fixed }
+	orders, err := client.ListOrders(context.Background(), Config{BaseURL: server.URL, AppID: "app_test", AppSecret: secret}, 25, "PAID")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(orders) != 1 || orders[0].MerchantOrderNo != "EUM-TEST-1" {
+		t.Fatalf("orders = %+v", orders)
+	}
+}
+
+func TestCancelOrderSignsEmptyBodyAndUsesProviderPath(t *testing.T) {
+	secret := "test-payment-center-secret-123"
+	fixed := time.Unix(1_786_360_000, 0)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/orders/EUM-TEST-1/cancel" || len(body) != 0 {
+			t.Fatalf("request = %s %s body=%q", r.Method, r.URL.Path, body)
+		}
+		if got := signRequest(secret, r.Method, r.URL.Path, r.Header.Get("X-Pay-Timestamp"), r.Header.Get("X-Pay-Nonce"), body); got != r.Header.Get("X-Pay-Signature") {
+			t.Fatalf("signature mismatch: computed %q, header %q", got, r.Header.Get("X-Pay-Signature"))
+		}
+		_, _ = w.Write([]byte(`{"merchant_order_no":"EUM-TEST-1","amount_fen":990,"currency":"CNY","subject":"月卡","status":"CANCELED","payment_memo":"PCABC123","payment_url":"https://pay.test/pay/abc"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(server.Client())
+	client.Now = func() time.Time { return fixed }
+	order, err := client.CancelOrder(context.Background(), Config{BaseURL: server.URL, AppID: "app_test", AppSecret: secret}, "EUM-TEST-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if order.Status != "CANCELED" {
+		t.Fatalf("order status = %q", order.Status)
 	}
 }
 

@@ -333,7 +333,7 @@ func (s *Service) createOrder(ctx context.Context, kind string, planID int64, ac
 	if err != nil {
 		return sqlite.PaymentOrder{}, err
 	}
-	providerOrder, err := s.center.CreateOrder(ctx, cfg, paymentcenter.CreateOrderInput{MerchantOrderNo: merchantNo, AmountFen: plan.PriceFen, Currency: "CNY", Subject: plan.Name, ExpiresInSeconds: view.OrderTTLMinutes * 60, ReturnURL: returnURL})
+	providerOrder, err := s.center.CreateOrder(ctx, cfg, paymentcenter.CreateOrderInput{MerchantOrderNo: merchantNo, AmountFen: plan.PriceFen, Currency: "CNY", Subject: plan.Name, ExpiresInSeconds: view.OrderTTLMinutes * 60, Note: providerOrderNote(kind, username, buyerInfo), ReturnURL: returnURL})
 	if err != nil {
 		return localOrder, fmt.Errorf("创建微信支付订单失败：%w", err)
 	}
@@ -348,11 +348,29 @@ func (s *Service) createOrder(ctx context.Context, kind string, planID int64, ac
 	if providerOrder.Status == "PAID" {
 		return s.fulfill(ctx, localOrder, paymentcenter.Notification{EventID: "provider-paid-" + merchantNo, MerchantOrderNo: merchantNo, AmountFen: providerOrder.AmountFen, Currency: providerOrder.Currency, PaidAt: parseProviderTime(providerOrder.PaidAt, now), PaymentIdempotencyKey: "provider-paid-" + merchantNo})
 	}
-	if providerOrder.Status == "CANCELLED" || providerOrder.Status == "EXPIRED" {
-		_ = s.store.SetPaymentOrderState(ctx, localOrder.ID, strings.ToLower(providerOrder.Status), providerOrder.Status, "", now)
+	if isProviderCanceled(providerOrder.Status) || providerOrder.Status == "EXPIRED" {
+		localStatus := "expired"
+		if isProviderCanceled(providerOrder.Status) {
+			localStatus = "canceled"
+		}
+		_ = s.store.SetPaymentOrderState(ctx, localOrder.ID, localStatus, providerOrder.Status, "", now)
 		return s.store.FindPaymentOrder(ctx, localOrder.ID)
 	}
 	return localOrder, nil
+}
+
+func providerOrderNote(kind, username, buyerInfo string) string {
+	if kind == KindRenewal {
+		return "业务账号：" + strings.TrimSpace(username)
+	}
+	if buyer := strings.TrimSpace(buyerInfo); buyer != "" {
+		return "购买人：" + buyer
+	}
+	return ""
+}
+
+func isProviderCanceled(status string) bool {
+	return status == "CANCELED" || status == "CANCELLED"
 }
 
 func (s *Service) PublicOrder(ctx context.Context, token string) (sqlite.PaymentOrder, error) {
@@ -421,9 +439,22 @@ func (s *Service) Reconcile(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	now := s.now().UTC()
+	providerOrders := make(map[string]paymentcenter.Order)
+	if listed, listErr := s.center.ListOrders(ctx, cfg, 200, ""); listErr == nil {
+		for _, providerOrder := range listed {
+			providerOrders[providerOrder.MerchantOrderNo] = providerOrder
+		}
+	}
 	var firstErr error
 	for _, order := range orders {
-		providerOrder, queryErr := s.center.QueryOrder(ctx, cfg, order.MerchantOrderNo)
+		providerOrder, found := providerOrders[order.MerchantOrderNo]
+		var queryErr error
+		if !found {
+			// The list endpoint is bounded to the newest 200 records. Fall back
+			// to the exact query for older local orders or older R Pay versions.
+			providerOrder, queryErr = s.center.QueryOrder(ctx, cfg, order.MerchantOrderNo)
+		}
 		if queryErr != nil {
 			if firstErr == nil {
 				firstErr = queryErr
@@ -436,13 +467,35 @@ func (s *Service) Reconcile(ctx context.Context) error {
 			}
 			continue
 		}
-		switch providerOrder.Status {
-		case "PAID":
-			_, queryErr = s.fulfill(ctx, order, paymentcenter.Notification{EventID: "reconcile-" + order.MerchantOrderNo, MerchantOrderNo: order.MerchantOrderNo, AmountFen: providerOrder.AmountFen, Currency: providerOrder.Currency, PaidAt: parseProviderTime(providerOrder.PaidAt, s.now().UTC()), PaymentIdempotencyKey: "reconcile-" + order.MerchantOrderNo})
-		case "CANCELLED":
-			queryErr = s.store.SetPaymentOrderState(ctx, order.ID, "canceled", providerOrder.Status, "", s.now().UTC())
-		case "EXPIRED":
-			queryErr = s.store.SetPaymentOrderState(ctx, order.ID, "expired", providerOrder.Status, "", s.now().UTC())
+		switch {
+		case providerOrder.Status == "PAID":
+			_, queryErr = s.fulfill(ctx, order, paymentcenter.Notification{EventID: "reconcile-" + order.MerchantOrderNo, MerchantOrderNo: order.MerchantOrderNo, AmountFen: providerOrder.AmountFen, Currency: providerOrder.Currency, PaidAt: parseProviderTime(providerOrder.PaidAt, now), PaymentIdempotencyKey: "reconcile-" + order.MerchantOrderNo})
+		case isProviderCanceled(providerOrder.Status):
+			queryErr = s.store.SetPaymentOrderState(ctx, order.ID, "canceled", providerOrder.Status, "", now)
+		case providerOrder.Status == "EXPIRED":
+			queryErr = s.store.SetPaymentOrderState(ctx, order.ID, "expired", providerOrder.Status, "", now)
+		case providerOrder.Status == "PENDING" && !order.ExpiresAt.After(now):
+			// R Pay supports explicit soft cancellation. Use it when the local
+			// snapshot has expired but the provider has not yet transitioned.
+			canceledOrder, cancelErr := s.center.CancelOrder(ctx, cfg, order.MerchantOrderNo)
+			if cancelErr != nil {
+				queryErr = cancelErr
+				break
+			}
+			if canceledOrder.MerchantOrderNo != order.MerchantOrderNo || canceledOrder.AmountFen != order.AmountFen || canceledOrder.Currency != order.Currency {
+				queryErr = fmt.Errorf("payment center cancellation mismatch for %s", order.MerchantOrderNo)
+				break
+			}
+			switch {
+			case isProviderCanceled(canceledOrder.Status):
+				queryErr = s.store.SetPaymentOrderState(ctx, order.ID, "canceled", canceledOrder.Status, "", now)
+			case canceledOrder.Status == "EXPIRED":
+				queryErr = s.store.SetPaymentOrderState(ctx, order.ID, "expired", canceledOrder.Status, "", now)
+			case canceledOrder.Status == "PAID":
+				_, queryErr = s.fulfill(ctx, order, paymentcenter.Notification{EventID: "reconcile-" + order.MerchantOrderNo, MerchantOrderNo: order.MerchantOrderNo, AmountFen: canceledOrder.AmountFen, Currency: canceledOrder.Currency, PaidAt: parseProviderTime(canceledOrder.PaidAt, now), PaymentIdempotencyKey: "reconcile-" + order.MerchantOrderNo})
+			default:
+				queryErr = fmt.Errorf("payment center returned unexpected cancellation status %q for %s", canceledOrder.Status, order.MerchantOrderNo)
+			}
 		}
 		if queryErr != nil && firstErr == nil {
 			firstErr = queryErr
