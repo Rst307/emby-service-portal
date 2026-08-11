@@ -60,7 +60,10 @@
           <strong>{{.Name}}</strong>
           <span>{{.DurationDays}} 天{{if .Note}} · {{.Note}}{{end}}</span>
         </div>
-        <button type="submit"><span class="money-value">{{formatMoney .PriceFen}}</span><small>下一步 →</small></button>
+        <div class="public-plan-action">
+          <div class="public-plan-price"><span>价格</span><strong>{{formatMoney .PriceFen}}</strong></div>
+          <button type="submit"><span>去支付</span><small>先验证账号 →</small></button>
+        </div>
         <label class="field plan-account-field">用户名
           <input name="username" autocomplete="username" placeholder="用于绑定续费账号" required>
         </label>

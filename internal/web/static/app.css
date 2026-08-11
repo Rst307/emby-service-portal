@@ -702,11 +702,15 @@ code { color: var(--accent); font-family: var(--mono); font-size: 0.9em; }
 .public-plan-copy { display: grid; min-width: 0; gap: 3px; }
 .public-plan-copy strong { color: var(--text); }
 .public-plan-copy span { overflow: hidden; color: var(--muted); font-size: 0.8rem; text-overflow: ellipsis; white-space: nowrap; }
-.public-plan-card button { display: grid; min-width: 102px; gap: 1px; padding: 8px 11px; }
+.public-plan-action { display: grid; justify-items: end; gap: 8px; min-width: 136px; }
+.public-plan-price { display: flex; align-items: baseline; gap: 5px; white-space: nowrap; }
+.public-plan-price span { color: var(--faint); font-family: var(--mono); font-size: 0.62rem; font-weight: 700; letter-spacing: 0.1em; }
+.public-plan-price strong { color: var(--accent); font-family: var(--mono); font-size: 1.6rem; font-variant-numeric: tabular-nums; font-weight: 850; letter-spacing: -0.08em; line-height: 1; }
+.public-plan-card button { display: grid; min-width: 136px; gap: 1px; padding: 9px 13px; }
 .public-plan-card button small { color: rgba(25, 17, 9, 0.72); font-size: 0.7rem; }
 .renewal-plan-list .public-plan-card { grid-template-columns: minmax(0, 1fr) auto; }
 .renewal-plan-list .plan-account-field { grid-column: 1 / -1; }
-.renewal-plan-list .public-plan-card button { grid-row: 1 / span 3; }
+.renewal-plan-list .public-plan-action { grid-row: 1 / span 3; }
 .renewal-divider { display: flex; align-items: center; gap: 12px; margin: 23px 0 1px; color: var(--faint); font-family: var(--mono); font-size: 0.65rem; letter-spacing: 0.08em; text-transform: uppercase; }
 .renewal-divider::before, .renewal-divider::after { height: 1px; flex: 1; background: var(--border); content: ""; }
 
@@ -837,7 +841,10 @@ dialog form { padding: 24px; }
   .quick-links.cols-2 { grid-template-columns: 1fr; }
   .quick-link { align-items: flex-start; flex-direction: column; gap: 3px; }
   .public-plan-card { grid-template-columns: 1fr; }
+  .public-plan-action { width: 100%; align-items: stretch; justify-items: stretch; }
+  .public-plan-price { justify-content: space-between; padding: 0 3px; }
   .public-plan-card button, .renewal-plan-list .public-plan-card button { grid-row: auto; width: 100%; }
+  .renewal-plan-list .public-plan-action { grid-row: auto; }
   .renewal-plan-list .plan-account-field { grid-column: auto; }
   .plan-edit-form { position: static; width: 100%; margin-top: 8px; }
   .inline-edit { width: 100%; }
