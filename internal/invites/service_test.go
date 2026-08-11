@@ -21,6 +21,33 @@ func (f *registrationSagaEmby) CreateUser(_ context.Context, username, _ string)
 func (*registrationSagaEmby) DeleteUser(context.Context, string) error            { return nil }
 func (*registrationSagaEmby) SetUserDisabled(context.Context, string, bool) error { return nil }
 
+func TestRenewForAuthenticatedAccountDoesNotNeedPassword(t *testing.T) {
+	ctx := context.Background()
+	store, err := sqlite.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	now := time.Now().UTC()
+	account, err := store.CreateAccount(ctx, sqlite.Account{EmbyUserID: "renew-user", Username: "alice", Status: "active", ExpiresAt: now.Add(time.Hour), CreatedAt: now, UpdatedAt: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := New(store, nil)
+	created, err := service.Create(ctx, CreateInput{DurationMinutes: 24 * 60, MaxUses: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	renewed, err := service.RenewForAccount(ctx, created.Code, account.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if renewed.ID != account.ID || !renewed.ExpiresAt.Equal(account.ExpiresAt.Add(24*time.Hour)) {
+		t.Fatalf("renewed account = %+v", renewed)
+	}
+}
+
 func TestIdempotentRegistrationDoesNotConsumeInviteTwice(t *testing.T) {
 	ctx := context.Background()
 	store, err := sqlite.Open(ctx, filepath.Join(t.TempDir(), "test.db"))

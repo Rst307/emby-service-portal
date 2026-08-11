@@ -55,7 +55,12 @@ func (s *Server) renewPaymentCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid CSRF token", http.StatusForbidden)
 		return
 	}
-	if !s.allowAttempt(w, r, s.publicLimit, r.Form.Get("username")) {
+	account, authenticated := s.portalAccount(r)
+	username := r.Form.Get("username")
+	if authenticated {
+		username = account.Username
+	}
+	if !s.allowAttempt(w, r, s.publicLimit, username) {
 		return
 	}
 	planID, err := strconv.ParseInt(strings.TrimSpace(r.Form.Get("plan_id")), 10, 64)
@@ -63,10 +68,22 @@ func (s *Server) renewPaymentCreate(w http.ResponseWriter, r *http.Request) {
 		err = errors.New("invalid plan")
 	}
 	if err == nil {
-		order, createErr := s.payments.CreateRenewalOrder(r.Context(), planID, r.Form.Get("username"), r.Form.Get("password"))
-		err = createErr
+		var token string
+		if authenticated {
+			order, createErr := s.payments.CreateRenewalOrderForAccount(r.Context(), planID, account.ID)
+			err = createErr
+			if err == nil {
+				token = order.PublicToken
+			}
+		} else {
+			order, createErr := s.payments.CreateRenewalOrder(r.Context(), planID, username, r.Form.Get("password"))
+			err = createErr
+			if err == nil {
+				token = order.PublicToken
+			}
+		}
 		if err == nil {
-			http.Redirect(w, r, "/payment/"+order.PublicToken, http.StatusSeeOther)
+			http.Redirect(w, r, "/payment/"+token, http.StatusSeeOther)
 			return
 		}
 	}

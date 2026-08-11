@@ -109,6 +109,27 @@ func (s *Service) Renew(ctx context.Context, code, username, password string) (s
 		}
 		return sqlite.Account{}, ErrUnavailable
 	}
+	return s.redeemRenewal(ctx, code, username)
+}
+
+// RenewForAccount redeems an invite for an already authenticated portal
+// session. The account ID comes from the server-side session, not from a form
+// field, so the caller does not need to resubmit the managed password.
+func (s *Service) RenewForAccount(ctx context.Context, code string, accountID int64) (sqlite.Account, error) {
+	account, err := s.store.FindAccount(ctx, accountID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return sqlite.Account{}, accounts.ErrNotFound
+	}
+	if err != nil {
+		return sqlite.Account{}, err
+	}
+	if account.Status != "active" && account.Status != "expired" {
+		return sqlite.Account{}, ErrUnavailable
+	}
+	return s.redeemRenewal(ctx, code, account.Username)
+}
+
+func (s *Service) redeemRenewal(ctx context.Context, code, username string) (sqlite.Account, error) {
 	result, err := s.store.RedeemRenewal(ctx, sqlite.RedeemRenewalInput{
 		CodeHash:   hash(strings.TrimSpace(code)),
 		Username:   strings.TrimSpace(username),

@@ -48,28 +48,31 @@
     </div>
     <p class="eyebrow">邀请码续费</p>
     <h1 class="page-title">延长订阅时间</h1>
-    <p class="page-lead">选择付费续费方案，或使用已有邀请码；续费时长都会从当前到期时间继续累加。</p>
+    <p class="page-lead">选择付费续费方案，或使用已有邀请码；续费时长都会从当前到期时间继续累加。{{if .Account.ID}}当前登录账号无需再次输入用户名和密码。{{end}}</p>
     {{if .Error}}<p class="alert error" role="alert">{{.Error}}</p>{{end}}
     {{if .RenewalPlans}}
     <div class="public-plan-list renewal-plan-list">
       {{range .RenewalPlans}}
-      <form method="post" action="/renew/payment" class="public-plan-card">
+      <form method="post" action="/renew/payment" class="public-plan-card{{if $.Account.ID}} portal-renewal-card{{end}}">
         <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
         <input type="hidden" name="plan_id" value="{{.ID}}">
         <div class="public-plan-copy">
           <strong>{{.Name}}</strong>
           <span>{{.DurationDays}} 天{{if .Note}} · {{.Note}}{{end}}</span>
+          {{if $.Account.ID}}<span class="portal-plan-account">当前账号：{{$.Account.Username}}</span>{{end}}
         </div>
         <div class="public-plan-action">
           <div class="public-plan-price"><span>价格</span><strong>{{formatMoney .PriceFen}}</strong></div>
-          <button type="submit"><span>去支付</span><small>先验证账号 →</small></button>
+          <button type="submit"><span>去支付</span><small>{{if $.Account.ID}}为当前账号续费 →{{else}}先验证账号 →{{end}}</small></button>
         </div>
+        {{if not $.Account.ID}}
         <label class="field plan-account-field">用户名
           <input name="username" autocomplete="username" placeholder="用于绑定续费账号" required>
         </label>
         <label class="field plan-account-field">账号密码
           <input name="password" type="password" autocomplete="current-password" placeholder="付款前验证账号归属" required>
         </label>
+        {{end}}
       </form>
       {{end}}
     </div>
@@ -80,12 +83,20 @@
       <label class="field">邀请码
         <input name="code" autocomplete="off" placeholder="例如 EUM-..." required>
       </label>
+      {{if .Account.ID}}
+      <div class="portal-renewal-account">
+        <span>当前登录账号</span>
+        <strong>{{.Account.Username}}</strong>
+        <small>无需再次输入用户名和密码</small>
+      </div>
+      {{else}}
       <label class="field">用户名
         <input name="username" autocomplete="username" placeholder="请输入 Emby 用户名" required>
       </label>
       <label class="field">账号密码
         <input type="password" name="password" autocomplete="current-password" placeholder="验证账号归属" required>
       </label>
+      {{end}}
       <button class="btn-block" type="submit">确认续费</button>
     </form>
     <p class="auth-foot"><a href="/login">登录用户中心</a> · 还没有账号？ <a href="/register">使用邀请码注册</a></p>

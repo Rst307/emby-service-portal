@@ -55,11 +55,11 @@ func TestRenderInvitesShowsCreatedCodeAndHumanizedDuration(t *testing.T) {
 	}
 	response := httptest.NewRecorder()
 	templates.Render(response, "invites", ViewData{NewInviteCode: "EUM-test-code-123", Invites: []sqlite.InviteCode{
-		{ID: 1, CodePrefix: "EUM-TEST", Code: "EUM-test-code-123", DurationMinutes: 30 * 24 * 60, MaxUses: 1, UsedCount: 1, Enabled: true},
+		{ID: 1, CodePrefix: "EUM-TEST", Code: "EUM-test-code-123", DurationMinutes: 30 * 24 * 60, MaxUses: 1, UsedCount: 1, Enabled: true, Redemptions: []sqlite.InviteRedemption{{AccountUsername: "alice", Kind: "register", RedeemedAt: time.Date(2030, 1, 2, 3, 4, 0, 0, time.UTC)}}},
 		{ID: 2, CodePrefix: "EUM-OLD", DurationMinutes: 45, MaxUses: 0, Enabled: false},
 	}})
 	page := response.Body.String()
-	for _, marker := range []string{"邀请码已创建", "EUM-test-code-123", "30 天", "45 分钟", "data-confirm=\"确认删除此邀请码？\""} {
+	for _, marker := range []string{"邀请码已创建", "EUM-test-code-123", "30 天", "45 分钟", "alice", "注册使用", "2030-01-02 03:04", "data-confirm=\"确认删除此邀请码？\""} {
 		if !strings.Contains(page, marker) {
 			t.Fatalf("invites page missing %q: %s", marker, page)
 		}
@@ -77,10 +77,31 @@ func TestRenderPortalDashboardShowsChineseStatus(t *testing.T) {
 	response := httptest.NewRecorder()
 	templates.Render(response, "portal-dashboard", ViewData{Account: sqlite.Account{Username: "alice", Status: "expired", ExpiresAt: time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC), Note: "VIP"}})
 	page := response.Body.String()
-	for _, marker := range []string{"你好，alice", "badge expired\">已过期", "2030-01-01 00:00", "退出登录"} {
+	for _, marker := range []string{"你好，alice", "badge expired\">已过期", "2030-01-01 00:00", "href=\"/purchase\">购买激活码", "href=\"/renew\">续费订阅", "需要办理什么？", "退出登录"} {
 		if !strings.Contains(page, marker) {
 			t.Fatalf("portal dashboard missing %q: %s", marker, page)
 		}
+	}
+}
+
+func TestRenderRenewHidesCredentialsForPortalAccount(t *testing.T) {
+	templates, err := NewTemplates(time.UTC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	templates.Render(response, "renew", ViewData{
+		Account:      sqlite.Account{ID: 7, Username: "alice", Status: "active"},
+		RenewalPlans: []sqlite.PaymentPlan{{ID: 3, Kind: "renewal", Name: "月度续费", DurationDays: 30, PriceFen: 990, Enabled: true}},
+	})
+	page := response.Body.String()
+	for _, marker := range []string{"当前登录账号无需再次输入用户名和密码", "当前账号：alice", "无需再次输入用户名和密码", "为当前账号续费"} {
+		if !strings.Contains(page, marker) {
+			t.Fatalf("authenticated renewal page missing %q: %s", marker, page)
+		}
+	}
+	if strings.Contains(page, `name="username"`) || strings.Contains(page, `name="password"`) {
+		t.Fatalf("authenticated renewal page still asks for credentials: %s", page)
 	}
 }
 

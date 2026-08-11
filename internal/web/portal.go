@@ -83,17 +83,31 @@ func (s *Server) renewPage(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) renderRenewPage(w http.ResponseWriter, r *http.Request, status int, errorMessage string) {
 	plans, _ := s.payments.ListPlans(r.Context(), "renewal", true)
-	s.templates.RenderStatus(w, "renew", admin.ViewData{CSRFToken: csrfFromRequest(r), Error: errorMessage, RenewalPlans: plans}, status)
+	account, _ := s.portalAccount(r)
+	s.templates.RenderStatus(w, "renew", admin.ViewData{CSRFToken: csrfFromRequest(r), Error: errorMessage, RenewalPlans: plans, Account: account}, status)
 }
 func (s *Server) renew(w http.ResponseWriter, r *http.Request) {
 	if !validCSRF(r) {
 		http.Error(w, "invalid CSRF token", http.StatusForbidden)
 		return
 	}
-	if !s.allowAttempt(w, r, s.publicLimit, r.Form.Get("username")) {
+	portalAccount, authenticated := s.portalAccount(r)
+	username := r.Form.Get("username")
+	password := r.Form.Get("password")
+	if authenticated {
+		username = portalAccount.Username
+		password = ""
+	}
+	if !s.allowAttempt(w, r, s.publicLimit, username) {
 		return
 	}
-	account, err := s.invites.Renew(r.Context(), r.Form.Get("code"), r.Form.Get("username"), r.Form.Get("password"))
+	var account sqlite.Account
+	var err error
+	if authenticated {
+		account, err = s.invites.RenewForAccount(r.Context(), r.Form.Get("code"), portalAccount.ID)
+	} else {
+		account, err = s.invites.Renew(r.Context(), r.Form.Get("code"), username, password)
+	}
 	if err != nil {
 		s.renderRenewPage(w, r, http.StatusBadRequest, "续费失败：邀请码不可用或账号不存在")
 		return

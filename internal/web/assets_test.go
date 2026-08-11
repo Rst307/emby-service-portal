@@ -6,6 +6,14 @@ import (
 	"testing"
 )
 
+func TestStylesheetKeepsAdminCurrencyIconOutsidePriceText(t *testing.T) {
+	response := httptest.NewRecorder()
+	(&Server{}).stylesheet(response, nil)
+	if !strings.Contains(response.Body.String(), `.admin-body .price-input-wrap input { padding-left: 32px; }`) {
+		t.Fatalf("stylesheet does not reserve space for the currency icon")
+	}
+}
+
 func TestStaticAssetsRequireRevalidation(t *testing.T) {
 	for _, test := range []struct {
 		name    string

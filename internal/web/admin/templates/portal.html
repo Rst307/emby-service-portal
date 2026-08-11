@@ -45,7 +45,8 @@
     </div>
     <nav class="nav-links" aria-label="用户中心导航">
       <a class="active" aria-current="page" href="/portal/">我的订阅</a>
-      <a href="/renew">续费</a>
+      <a href="/purchase">购买激活码</a>
+      <a href="/renew">续费订阅</a>
     </nav>
     <form class="logout-form" method="post" action="/portal/logout">
       <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
@@ -67,7 +68,7 @@
       <p class="eyebrow">订阅到期时间</p>
       <p class="expiry-value">{{formatTime .Account.ExpiresAt "2006-01-02 15:04"}}</p>
       <p class="page-lead">时间以 {{timeZone}} 显示。到期后系统将自动禁用登录。</p>
-      <p><a class="quick-link" href="/renew">使用邀请码续费 <span>延长订阅 →</span></a></p>
+      <p><a class="quick-link" href="/renew">续费订阅 <span>邀请码或在线购买 →</span></a></p>
     </article>
     <aside class="panel hero-card">
       <h2>账号信息</h2>
@@ -75,6 +76,22 @@
       {{if .Account.Note}}<p class="page-lead">备注：{{.Account.Note}}</p>{{end}}
       <p class="subtle">为保护账号安全，用户中心不会显示或导出密码。</p>
     </aside>
+  </section>
+
+  <section class="panel portal-action-panel" aria-labelledby="portal-actions-title">
+    <header class="panel-header">
+      <div>
+        <p class="section-kicker">MEMBER OPTIONS</p>
+        <h2 class="panel-title" id="portal-actions-title">需要办理什么？</h2>
+        <p class="panel-copy">从这里直接进入购买激活码或续费订阅。</p>
+      </div>
+    </header>
+    <div class="panel-body">
+      <div class="quick-links cols-2">
+        <a class="quick-link" href="/purchase">购买激活码 <span>付款后获得一次性激活码 →</span></a>
+        <a class="quick-link" href="/renew">续费订阅 <span>使用邀请码或选择方案 →</span></a>
+      </div>
+    </div>
   </section>
 </main>
 </body>

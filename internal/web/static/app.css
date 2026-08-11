@@ -522,6 +522,11 @@ tbody tr[data-account-status="expired"] td { opacity: 0.7; }
 .col-check { width: 44px; }
 .col-actions { min-width: 240px; }
 .cell-note { max-width: 240px; white-space: normal; overflow-wrap: anywhere; }
+.invite-redemption-cell { min-width: 170px; }
+.invite-redemptions { display: grid; gap: 6px; }
+.invite-redemption { display: grid; gap: 1px; }
+.invite-redemption strong { color: var(--text); font-size: 0.82rem; }
+.invite-redemption small { color: var(--muted); font-family: var(--mono); font-size: 0.65rem; white-space: nowrap; }
 .subtle { color: var(--muted); font-size: 0.84rem; }
 .empty { padding: 48px 18px !important; text-align: center; color: var(--muted); }
 
@@ -729,6 +734,12 @@ code { color: var(--accent); font-family: var(--mono); font-size: 0.9em; }
 .renewal-plan-list .public-plan-card { grid-template-columns: minmax(0, 1fr) auto; }
 .renewal-plan-list .plan-account-field { grid-column: 1 / -1; }
 .renewal-plan-list .public-plan-action { grid-row: 1 / span 3; }
+.renewal-plan-list .portal-renewal-card .public-plan-action { grid-row: 1; }
+.portal-plan-account { color: var(--teal) !important; font-family: var(--mono); font-size: 0.7rem !important; }
+.portal-renewal-account { display: grid; gap: 3px; padding: 11px 12px; border: 1px solid rgba(123, 210, 197, 0.25); border-radius: 9px; background: rgba(123, 210, 197, 0.07); }
+.portal-renewal-account span { color: var(--faint); font-family: var(--mono); font-size: 0.65rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.portal-renewal-account strong { color: var(--text); font-size: 0.92rem; }
+.portal-renewal-account small { color: var(--muted); font-size: 0.72rem; }
 .renewal-divider { display: flex; align-items: center; gap: 12px; margin: 23px 0 1px; color: var(--faint); font-family: var(--mono); font-size: 0.65rem; letter-spacing: 0.08em; text-transform: uppercase; }
 .renewal-divider::before, .renewal-divider::after { height: 1px; flex: 1; background: var(--border); content: ""; }
 
@@ -869,6 +880,7 @@ dialog form { padding: 24px; }
   .public-plan-price { justify-content: space-between; padding: 0 3px; }
   .public-plan-card button, .renewal-plan-list .public-plan-card button { grid-row: auto; width: 100%; }
   .renewal-plan-list .public-plan-action { grid-row: auto; }
+  .renewal-plan-list .portal-renewal-card .public-plan-action { grid-row: auto; }
   .renewal-plan-list .plan-account-field { grid-column: auto; }
   .plan-actions { align-items: stretch; flex-direction: column; }
   .quick-link span { text-align: left; }
@@ -1072,6 +1084,8 @@ dialog form { padding: 24px; }
 .admin-body .panel-copy { color: rgba(0, 0, 0, 0.45); font-size: 0.82rem; }
 .admin-body .panel-body { padding: 20px 24px 24px; }
 .admin-body .subtle { color: rgba(0, 0, 0, 0.45); font-size: 0.78rem; }
+.admin-body .invite-redemption strong { color: rgba(0, 0, 0, 0.88); }
+.admin-body .invite-redemption small { color: rgba(0, 0, 0, 0.45); }
 
 .admin-body .field { gap: 6px; color: rgba(0, 0, 0, 0.65); font-size: 0.78rem; font-weight: 500; }
 .admin-body input, .admin-body textarea, .admin-body select {
@@ -1084,6 +1098,7 @@ dialog form { padding: 24px; }
 }
 .admin-body input::placeholder, .admin-body textarea::placeholder { color: rgba(0, 0, 0, 0.28); }
 .admin-body input:focus, .admin-body textarea:focus, .admin-body select:focus { border-color: #1677ff; background: #ffffff; box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.12); }
+.admin-body .price-input-wrap input { padding-left: 32px; }
 .admin-body input[type="datetime-local"] { color-scheme: light; }
 .admin-body button { border-radius: 6px; padding: 8px 15px; background: #1677ff; box-shadow: 0 2px 0 rgba(5, 145, 255, 0.1); color: #ffffff; font-size: 0.82rem; font-weight: 500; }
 .admin-body button:hover { background: #4096ff; box-shadow: 0 3px 8px rgba(22, 119, 255, 0.18); filter: none; transform: none; }

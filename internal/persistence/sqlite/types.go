@@ -57,6 +57,18 @@ type InviteCode struct {
 	Enabled         bool
 	Note            string
 	CreatedAt       time.Time
+	Redemptions     []InviteRedemption
+}
+
+type InviteRedemption struct {
+	ID              int64
+	InviteCodeID    int64
+	AccountID       int64
+	AccountUsername string
+	Kind            string
+	DurationDays    int
+	DurationMinutes int
+	RedeemedAt      time.Time
 }
 
 var (

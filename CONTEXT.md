@@ -40,6 +40,10 @@ _Avoid_: payment receipt, invite code
 A successful, recorded use of an invite code to register a business account or extend its subscription period.
 _Avoid_: payment, order
 
+**用户中心会话**:
+A server-side authenticated session that identifies one 业务账号. When the session is valid, renewal uses that account identity rather than trusting a username or password submitted by the browser.
+_Avoid_: hidden account field
+
 **禁用**:
 The state in which login is denied by setting the linked Emby 用户's `IsDisabled` policy to true. It does not delete the user or their Emby data.
 _Avoid_: deletion, removal

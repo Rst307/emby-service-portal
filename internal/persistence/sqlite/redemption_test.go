@@ -7,6 +7,42 @@ import (
 	"time"
 )
 
+func TestListInvitesIncludesTheBusinessAccountThatUsedTheCode(t *testing.T) {
+	ctx := context.Background()
+	store, err := Open(ctx, t.TempDir()+"/manager.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	now := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
+	account, err := store.CreateAccount(ctx, Account{EmbyUserID: "emby-alice", Username: "alice", Status: "active", ExpiresAt: now.Add(time.Hour), CreatedAt: now, UpdatedAt: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	invite, err := store.CreateInvite(ctx, InviteCode{CodeHash: "invite-hash", Code: "EUM-ACT-test", CodePrefix: "EUM-ACT", DurationDays: 1, DurationMinutes: 24 * 60, MaxUses: 1, Enabled: true, CreatedAt: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ConsumeInvite(ctx, invite.CodeHash, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordRedemption(ctx, invite.ID, account.ID, "register", invite.DurationDays, invite.DurationMinutes, now); err != nil {
+		t.Fatal(err)
+	}
+	listed, err := store.ListInvites(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listed) != 1 || len(listed[0].Redemptions) != 1 {
+		t.Fatalf("listed invites = %+v", listed)
+	}
+	redemption := listed[0].Redemptions[0]
+	if redemption.AccountID != account.ID || redemption.AccountUsername != "alice" || redemption.Kind != "register" || !redemption.RedeemedAt.Equal(now) {
+		t.Fatalf("redemption = %+v", redemption)
+	}
+}
+
 func TestRedeemRenewalAtomicallyExtendsEveryConcurrentRedemption(t *testing.T) {
 	ctx := context.Background()
 	store, err := Open(ctx, t.TempDir()+"/manager.db")

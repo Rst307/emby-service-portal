@@ -4,6 +4,7 @@ package payments
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -291,6 +292,23 @@ func (s *Service) CreateRenewalOrder(ctx context.Context, planID int64, username
 	account, err := s.store.FindAccountByUsername(ctx, username)
 	if err != nil {
 		return sqlite.PaymentOrder{}, errors.New("账号不存在")
+	}
+	return s.createOrder(ctx, KindRenewal, planID, &account.ID, account.Username, account.Username)
+}
+
+// CreateRenewalOrderForAccount creates a paid renewal order for the account
+// identified by an authenticated portal session. The caller never supplies an
+// account ID from the form; the web layer obtains it from the server session.
+func (s *Service) CreateRenewalOrderForAccount(ctx context.Context, planID, accountID int64) (sqlite.PaymentOrder, error) {
+	account, err := s.store.FindAccount(ctx, accountID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return sqlite.PaymentOrder{}, errors.New("账号不存在")
+	}
+	if err != nil {
+		return sqlite.PaymentOrder{}, err
+	}
+	if account.Status != "active" && account.Status != "expired" {
+		return sqlite.PaymentOrder{}, errors.New("账号当前不可续费")
 	}
 	return s.createOrder(ctx, KindRenewal, planID, &account.ID, account.Username, account.Username)
 }

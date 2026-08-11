@@ -33,8 +33,45 @@ func (s *Store) ListInvites(ctx context.Context) ([]InviteCode, error) {
 		}
 		invites = append(invites, invite)
 	}
-	return invites, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	redemptions, err := s.ListInviteRedemptions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	byInvite := make(map[int64][]InviteRedemption, len(redemptions))
+	for _, redemption := range redemptions {
+		byInvite[redemption.InviteCodeID] = append(byInvite[redemption.InviteCodeID], redemption)
+	}
+	for i := range invites {
+		invites[i].Redemptions = byInvite[invites[i].ID]
+	}
+	return invites, nil
 }
+
+func (s *Store) ListInviteRedemptions(ctx context.Context) ([]InviteRedemption, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT r.id, r.invite_code_id, r.account_id, COALESCE(a.username, ''), r.kind, r.duration_days, r.duration_minutes, r.redeemed_at FROM invite_redemptions r LEFT JOIN accounts a ON a.id = r.account_id ORDER BY r.redeemed_at DESC, r.id DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	redemptions := make([]InviteRedemption, 0)
+	for rows.Next() {
+		var redemption InviteRedemption
+		var redeemedAt string
+		if err := rows.Scan(&redemption.ID, &redemption.InviteCodeID, &redemption.AccountID, &redemption.AccountUsername, &redemption.Kind, &redemption.DurationDays, &redemption.DurationMinutes, &redeemedAt); err != nil {
+			return nil, err
+		}
+		redemption.RedeemedAt, err = parseTimestamp(redeemedAt)
+		if err != nil {
+			return nil, err
+		}
+		redemptions = append(redemptions, redemption)
+	}
+	return redemptions, rows.Err()
+}
+
 func (s *Store) SetInviteEnabled(ctx context.Context, id int64, enabled bool) error {
 	result, err := s.db.ExecContext(ctx, `UPDATE invite_codes SET enabled = ? WHERE id = ?`, enabled, id)
 	if err != nil {

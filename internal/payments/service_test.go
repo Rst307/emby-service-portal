@@ -154,6 +154,57 @@ func TestReconcileCancelsLocallyExpiredRPayOrder(t *testing.T) {
 	}
 }
 
+func TestRenewalOrderForAuthenticatedAccountSkipsPasswordVerification(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 8, 10, 12, 0, 0, 0, time.UTC)
+	secret := "test-payment-center-secret-123"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/orders" {
+			t.Fatalf("provider request = %s %s", r.Method, r.URL.Path)
+		}
+		body, _ := io.ReadAll(r.Body)
+		var request struct {
+			Note string `json:"note"`
+		}
+		if err := json.Unmarshal(body, &request); err != nil {
+			t.Fatalf("decode provider request: %v", err)
+		}
+		if request.Note != "业务账号：alice" {
+			t.Fatalf("provider note = %q", request.Note)
+		}
+		_, _ = w.Write([]byte(`{"merchant_order_no":"` + merchantOrderFromBody(body) + `","amount_fen":990,"currency":"CNY","subject":"月卡续费","status":"PENDING","payment_memo":"PCABC123","payment_url":"https://pay.example/checkout","expires_at":"2026-08-10T12:15:00+00:00"}`))
+	}))
+	defer server.Close()
+
+	store, err := sqlite.Open(ctx, t.TempDir()+"/manager.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	account, err := store.CreateAccount(ctx, sqlite.Account{EmbyUserID: "emby-user", Username: "alice", Status: "active", ExpiresAt: now.Add(24 * time.Hour), CreatedAt: now, UpdatedAt: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	center := paymentcenter.NewClient(server.Client())
+	center.Now = func() time.Time { return now }
+	service := New(store, nil, credentials.New("test-credential-master-key-that-is-long-enough"), center)
+	service.now = func() time.Time { return now }
+	if err := service.UpdateSettings(ctx, UpdatePaymentSettingsInput{BaseURL: server.URL, AppID: "app_test", AppSecret: secret, CallbackURL: "http://127.0.0.1/webhooks/wxpay-payment-center", OrderTTLMinutes: 15}); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := service.CreatePlan(ctx, sqlite.CreatePaymentPlanInput{Kind: KindRenewal, Name: "月卡续费", DurationDays: 30, PriceFen: 990})
+	if err != nil {
+		t.Fatal(err)
+	}
+	order, err := service.CreateRenewalOrderForAccount(ctx, plan.ID, account.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if order.AccountID == nil || *order.AccountID != account.ID || order.AccountUsername != "alice" || order.PaymentStatus != "pending" {
+		t.Fatalf("renewal order = %+v", order)
+	}
+}
+
 func merchantOrderFromBody(body []byte) string {
 	const key = `"merchant_order_no":"`
 	text := string(body)

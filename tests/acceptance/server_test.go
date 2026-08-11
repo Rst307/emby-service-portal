@@ -432,6 +432,57 @@ func TestUserPortalLoginAndDashboard(t *testing.T) {
 	}
 }
 
+func TestAuthenticatedPortalRenewalUsesSessionAccountWithoutCredentials(t *testing.T) {
+	application := testApplication(t)
+	defer application.Close()
+	server := httptest.NewServer(application.Handler())
+	defer server.Close()
+
+	response := postJSON(t, http.DefaultClient, server.URL+"/api/v1/accounts", `{"username":"portal-user","password":"password123","expires_at":"2030-01-01T00:00:00Z"}`, "integration-key")
+	if response.StatusCode != http.StatusCreated {
+		t.Fatalf("create portal account status = %d: %s", response.StatusCode, body(t, response))
+	}
+	_ = body(t, response)
+
+	adminJar, _ := cookiejar.New(nil)
+	adminClient := &http.Client{Jar: adminJar, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
+	login(t, adminClient, server.URL)
+	response = get(t, adminClient, server.URL+"/admin/invites")
+	responseBody := body(t, response)
+	response = postForm(t, adminClient, server.URL+"/admin/invites", url.Values{"duration": {"1"}, "duration_unit": {"day"}, "max_uses": {"1"}, "csrf_token": {csrf(t, responseBody)}})
+	if response.StatusCode != http.StatusCreated {
+		t.Fatalf("create renewal invite status = %d: %s", response.StatusCode, body(t, response))
+	}
+	inviteMatch := regexp.MustCompile(`EUM-[A-Za-z0-9_-]+`).FindString(body(t, response))
+	if inviteMatch == "" {
+		t.Fatalf("created invite code missing: %s", body(t, response))
+	}
+
+	portalJar, _ := cookiejar.New(nil)
+	portalClient := &http.Client{Jar: portalJar, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
+	response = get(t, portalClient, server.URL+"/portal/login")
+	response = postForm(t, portalClient, server.URL+"/portal/login", url.Values{"username": {"portal-user"}, "password": {"password123"}, "csrf_token": {csrf(t, body(t, response))}})
+	if response.StatusCode != http.StatusSeeOther {
+		t.Fatalf("portal login status = %d", response.StatusCode)
+	}
+	response = get(t, portalClient, server.URL+"/portal/")
+	portalPage := body(t, response)
+	for _, marker := range []string{`href="/purchase">购买激活码`, `href="/renew">续费订阅`} {
+		if !strings.Contains(portalPage, marker) {
+			t.Fatalf("portal dashboard missing %q: %s", marker, portalPage)
+		}
+	}
+	response = get(t, portalClient, server.URL+"/renew")
+	renewPage := body(t, response)
+	if strings.Contains(renewPage, `name="username"`) || strings.Contains(renewPage, `name="password"`) {
+		t.Fatalf("authenticated renewal page still asks for credentials: %s", renewPage)
+	}
+	response = postForm(t, portalClient, server.URL+"/renew", url.Values{"code": {inviteMatch}, "csrf_token": {csrf(t, renewPage)}})
+	if response.StatusCode != http.StatusOK || !strings.Contains(body(t, response), "续费成功") {
+		t.Fatalf("authenticated invite renewal status = %d: %s", response.StatusCode, body(t, response))
+	}
+}
+
 func TestPortalSessionIsDeniedImmediatelyAfterAccountIsDisabled(t *testing.T) {
 	application := testApplication(t)
 	defer application.Close()
