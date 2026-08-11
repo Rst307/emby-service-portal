@@ -2,6 +2,8 @@ package sqlite
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"testing"
 	"time"
 )
@@ -46,6 +48,37 @@ func TestFulfillActivationPaymentIsIdempotent(t *testing.T) {
 	}
 	if inviteCount != 1 || eventCount != 1 {
 		t.Fatalf("invite count = %d, event count = %d", inviteCount, eventCount)
+	}
+}
+
+func TestDeletePaymentPlanProtectsReferencedOrders(t *testing.T) {
+	ctx := context.Background()
+	store, err := Open(ctx, t.TempDir()+"/manager.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	now := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
+	unused, err := store.CreatePaymentPlan(ctx, CreatePaymentPlanInput{Kind: "activation", Name: "未使用方案", DurationDays: 30, PriceFen: 990}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.DeletePaymentPlan(ctx, unused.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.FindPaymentPlan(ctx, unused.ID); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("deleted plan lookup error = %v", err)
+	}
+
+	used, err := store.CreatePaymentPlan(ctx, CreatePaymentPlanInput{Kind: "activation", Name: "已有订单方案", DurationDays: 30, PriceFen: 990}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CreatePaymentOrder(ctx, CreatePaymentOrderInput{PublicToken: "delete-test-token", MerchantOrderNo: "EUM-DELETE-TEST", Kind: "activation", PlanID: used.ID, PlanName: used.Name, DurationDays: used.DurationDays, DurationMinutes: used.DurationMinutes, AmountFen: used.PriceFen, Currency: "CNY", ExpiresAt: now.Add(time.Hour), Now: now}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.DeletePaymentPlan(ctx, used.ID); !errors.Is(err, ErrPaymentPlanInUse) {
+		t.Fatalf("delete referenced plan error = %v", err)
 	}
 }
 

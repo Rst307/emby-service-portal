@@ -122,9 +122,24 @@ func TestRenderPlansShowsBothSaleKinds(t *testing.T) {
 		RenewalPlans:    []sqlite.PaymentPlan{{ID: 2, Kind: "renewal", Name: "季度续费", DurationDays: 90, PriceFen: 2490, Enabled: false}},
 	})
 	page := response.Body.String()
-	for _, marker := range []string{"售卖方案", "月卡激活", "¥9.90", "季度续费", "¥24.90", "已下架", "/admin/plans/2/toggle"} {
+	for _, marker := range []string{"售卖方案", "月卡激活", "¥9.90", "季度续费", "¥24.90", "已下架", "/admin/plans/2/toggle", "/admin/plans/2/edit", "/admin/plans/2/delete"} {
 		if !strings.Contains(page, marker) {
 			t.Fatalf("plans page missing %q: %s", marker, page)
+		}
+	}
+}
+
+func TestRenderPlanEditShowsFocusedEditor(t *testing.T) {
+	templates, err := NewTemplates(time.UTC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	templates.Render(response, "plan-edit", ViewData{CSRFToken: "csrf", PlanEdit: PlanEditData{Plan: sqlite.PaymentPlan{ID: 2, Kind: "renewal", Name: "季度续费", DurationDays: 90, PriceFen: 2490, Enabled: true}}})
+	page := response.Body.String()
+	for _, marker := range []string{"把方案信息写清楚", "方案名称", "订阅时长（天）", "售价（元）", "保存方案", "当前方案", "已经创建的订单"} {
+		if !strings.Contains(page, marker) {
+			t.Fatalf("plan edit page missing %q: %s", marker, page)
 		}
 	}
 }

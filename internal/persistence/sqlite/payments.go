@@ -96,6 +96,31 @@ func (s *Store) SetPaymentPlanEnabled(ctx context.Context, id int64, enabled boo
 	return nil
 }
 
+// DeletePaymentPlan removes a catalog plan only when no payment order refers
+// to it. Existing orders retain their copied plan snapshot and must remain
+// auditable, so referenced plans should be disabled instead.
+func (s *Store) DeletePaymentPlan(ctx context.Context, id int64) error {
+	result, err := s.db.ExecContext(ctx, `DELETE FROM payment_plans WHERE id = ? AND NOT EXISTS (SELECT 1 FROM payment_orders WHERE plan_id = ?)`, id, id)
+	if err != nil {
+		return err
+	}
+	changed, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if changed == 1 {
+		return nil
+	}
+	var exists bool
+	if err := s.db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM payment_plans WHERE id = ?)`, id).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		return sql.ErrNoRows
+	}
+	return ErrPaymentPlanInUse
+}
+
 const paymentOrderSelect = `SELECT id, public_token, merchant_order_no, kind, plan_id, plan_name, account_id, account_username, duration_days, duration_minutes, amount_fen, currency, payment_status, fulfillment_status, provider_status, payment_url, payment_memo, provider_payment_key, invite_id, failure_reason, expires_at, paid_at, created_at, updated_at FROM payment_orders`
 
 func (s *Store) CreatePaymentOrder(ctx context.Context, input CreatePaymentOrderInput) (PaymentOrder, error) {

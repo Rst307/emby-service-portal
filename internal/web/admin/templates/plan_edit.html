@@ -1,0 +1,87 @@
+{{define "plan-edit"}}<!doctype html>
+<html lang="zh-CN">
+<head>
+  {{template "head" "编辑售卖方案 · Emby 账号管理"}}
+</head>
+<body>
+<main class="app-shell">
+  {{template "admin-nav" (dict "active" "plans" "csrf" .CSRFToken)}}
+
+  <section class="page-heading plan-edit-heading">
+    <div>
+      <p class="eyebrow">商品目录 / 编辑方案</p>
+      <h1 class="page-title">把方案信息写清楚</h1>
+      <p class="page-lead">集中修改名称、订阅时长、价格和说明。保存后只影响新创建的支付订单。</p>
+    </div>
+    <a class="plan-back-link" href="/admin/plans">← 返回方案目录</a>
+  </section>
+
+  {{template "alerts" .}}
+
+  <section class="plan-editor-layout">
+    <section class="panel plan-editor-panel">
+      <header class="panel-header">
+        <div class="plan-editor-heading-row">
+          <div>
+            <p class="section-kicker">{{planKindLabel .PlanEdit.Plan.Kind}}</p>
+            <h2 class="panel-title">{{.PlanEdit.Plan.Name}}</h2>
+            <p class="panel-copy">方案 #{{.PlanEdit.Plan.ID}} · 当前{{if .PlanEdit.Plan.Enabled}}正在销售{{else}}已下架{{end}}</p>
+          </div>
+          <span class="badge {{if .PlanEdit.Plan.Enabled}}enabled{{else}}off{{end}}">{{if .PlanEdit.Plan.Enabled}}销售中{{else}}已下架{{end}}</span>
+        </div>
+      </header>
+      <div class="panel-body">
+        <form method="post" action="/admin/plans/{{.PlanEdit.Plan.ID}}/update" class="plan-editor-form">
+          <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+          <div class="plan-editor-grid">
+            <label class="field plan-editor-name">方案名称
+              <span class="field-hint">用户在购买页面看到的标题</span>
+              <input name="name" value="{{if .PlanEdit.Submitted}}{{.PlanEdit.Name}}{{else}}{{.PlanEdit.Plan.Name}}{{end}}" placeholder="例如：季度激活码" maxlength="100" required autofocus>
+            </label>
+            <label class="field">订阅时长（天）
+              <span class="field-hint">付款成功后增加的访问时长</span>
+              <input name="duration_days" type="number" min="1" max="3650" value="{{if .PlanEdit.Submitted}}{{.PlanEdit.DurationDays}}{{else}}{{.PlanEdit.Plan.DurationDays}}{{end}}" required>
+            </label>
+            <label class="field plan-editor-price">售价（元）
+              <span class="field-hint">仅支持人民币，最多两位小数</span>
+              <span class="price-input-wrap"><span aria-hidden="true">¥</span><input name="price" type="number" min="0.01" step="0.01" value="{{if .PlanEdit.Submitted}}{{.PlanEdit.Price}}{{else}}{{formatPriceInput .PlanEdit.Plan.PriceFen}}{{end}}" required></span>
+            </label>
+          </div>
+          <label class="field">方案说明
+            <span class="field-hint">补充使用场景、权益或适用人群；可以留空</span>
+            <textarea name="note" rows="4" maxlength="500" placeholder="例如：适用于新用户注册，付款后生成一次性激活码">{{if .PlanEdit.Submitted}}{{.PlanEdit.Note}}{{else}}{{.PlanEdit.Plan.Note}}{{end}}</textarea>
+          </label>
+          <div class="plan-editor-actions">
+            <a class="plan-cancel-link" href="/admin/plans">取消</a>
+            <button type="submit">保存方案</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <aside class="panel plan-editor-guide">
+      <header class="panel-header">
+        <div>
+          <p class="section-kicker">EDIT NOTES</p>
+          <h2 class="panel-title">修改前看这里</h2>
+        </div>
+      </header>
+      <div class="panel-body">
+        <div class="plan-editor-preview">
+          <span class="subtle">当前方案</span>
+          <strong>{{.PlanEdit.Plan.Name}}</strong>
+          <span>{{.PlanEdit.Plan.DurationDays}} 天 · {{formatMoney .PlanEdit.Plan.PriceFen}}</span>
+        </div>
+        <ul class="plan-editor-rules">
+          <li>修改只影响之后创建的支付订单。</li>
+          <li>已经创建的订单保留付款时的名称、时长和价格。</li>
+          <li>暂时不卖时，回到方案目录使用“下架”，不要急着删除。</li>
+        </ul>
+        <a class="quick-link" href="/admin/plans"><strong>查看全部方案</strong><span>返回目录 →</span></a>
+      </div>
+    </aside>
+  </section>
+</main>
+</body>
+</html>
+{{end}}

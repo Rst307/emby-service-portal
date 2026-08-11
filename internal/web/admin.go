@@ -1,6 +1,7 @@
 package web
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
@@ -203,6 +204,41 @@ func (s *Server) planCreate(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/admin/plans?message="+url.QueryEscape("套餐已添加"), http.StatusSeeOther)
 }
 
+func planEditData(plan sqlite.PaymentPlan) admin.PlanEditData {
+	return admin.PlanEditData{
+		Plan:         plan,
+		Name:         plan.Name,
+		DurationDays: strconv.Itoa(plan.DurationDays),
+		Price:        fmt.Sprintf("%d.%02d", plan.PriceFen/100, plan.PriceFen%100),
+		Note:         plan.Note,
+	}
+}
+
+func (s *Server) renderPlanEdit(w http.ResponseWriter, r *http.Request, status int, errorMessage string, data admin.PlanEditData) {
+	s.templates.RenderStatus(w, "plan-edit", admin.ViewData{CSRFToken: csrfFromRequest(r), Error: errorMessage, PlanEdit: data}, status)
+}
+
+func (s *Server) planEdit(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdmin(w, r) {
+		return
+	}
+	id, err := accountID(r)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	plan, err := s.payments.FindPlan(r.Context(), id)
+	if errors.Is(err, sql.ErrNoRows) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		http.Error(w, "load payment plan", http.StatusInternalServerError)
+		return
+	}
+	s.renderPlanEdit(w, r, http.StatusOK, "", planEditData(plan))
+}
+
 func (s *Server) planUpdate(w http.ResponseWriter, r *http.Request) {
 	if !s.requireAdmin(w, r) {
 		return
@@ -212,22 +248,42 @@ func (s *Server) planUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, err := accountID(r)
-	price, priceErr := parsePriceFen(r.Form.Get("price"))
-	days, daysErr := strconv.Atoi(strings.TrimSpace(r.Form.Get("duration_days")))
-	if err == nil && priceErr != nil {
-		err = priceErr
+	if err != nil {
+		http.NotFound(w, r)
+		return
 	}
-	if err == nil && daysErr != nil {
+	plan, err := s.payments.FindPlan(r.Context(), id)
+	if errors.Is(err, sql.ErrNoRows) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		http.Error(w, "load payment plan", http.StatusInternalServerError)
+		return
+	}
+	form := admin.PlanEditData{
+		Plan:         plan,
+		Name:         r.Form.Get("name"),
+		DurationDays: strings.TrimSpace(r.Form.Get("duration_days")),
+		Price:        strings.TrimSpace(r.Form.Get("price")),
+		Note:         r.Form.Get("note"),
+		Submitted:    true,
+	}
+	price, priceErr := parsePriceFen(form.Price)
+	days, daysErr := strconv.Atoi(form.DurationDays)
+	if priceErr != nil {
+		err = priceErr
+	} else if daysErr != nil {
 		err = daysErr
 	}
 	if err == nil {
-		_, err = s.payments.UpdatePlan(r.Context(), id, sqlite.UpdatePaymentPlanInput{Name: r.Form.Get("name"), DurationDays: days, PriceFen: price, Note: r.Form.Get("note"), SortOrder: 0})
+		_, err = s.payments.UpdatePlan(r.Context(), id, sqlite.UpdatePaymentPlanInput{Name: form.Name, DurationDays: days, PriceFen: price, Note: form.Note, SortOrder: plan.SortOrder})
 	}
 	if err != nil {
-		s.renderPlans(w, r, http.StatusBadRequest, "保存套餐失败："+err.Error(), "")
+		s.renderPlanEdit(w, r, http.StatusBadRequest, "保存方案失败："+err.Error(), form)
 		return
 	}
-	http.Redirect(w, r, "/admin/plans?message="+url.QueryEscape("套餐已保存"), http.StatusSeeOther)
+	http.Redirect(w, r, "/admin/plans?message="+url.QueryEscape("方案已保存"), http.StatusSeeOther)
 }
 
 func (s *Server) planToggle(w http.ResponseWriter, r *http.Request) {
@@ -248,6 +304,31 @@ func (s *Server) planToggle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/admin/plans?message="+url.QueryEscape("套餐状态已更新"), http.StatusSeeOther)
+}
+
+func (s *Server) planDelete(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdmin(w, r) {
+		return
+	}
+	if !validCSRF(r) {
+		http.Error(w, "invalid CSRF token", http.StatusForbidden)
+		return
+	}
+	id, err := accountID(r)
+	if err == nil {
+		err = s.payments.DeletePlan(r.Context(), id)
+	}
+	if err != nil {
+		message := "删除方案失败"
+		if errors.Is(err, sqlite.ErrPaymentPlanInUse) {
+			message = "该方案已有支付订单，不能删除；如不再销售，请使用下架"
+		} else if errors.Is(err, sql.ErrNoRows) {
+			message = "方案不存在或已经删除"
+		}
+		s.renderPlans(w, r, http.StatusBadRequest, message, "")
+		return
+	}
+	http.Redirect(w, r, "/admin/plans?message="+url.QueryEscape("方案已删除"), http.StatusSeeOther)
 }
 
 func parsePriceFen(raw string) (int, error) {

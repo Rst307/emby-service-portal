@@ -61,6 +61,7 @@ type InviteCode struct {
 
 var (
 	ErrInviteNotRedeemable    = errors.New("invite is not redeemable")
+	ErrPaymentPlanInUse       = errors.New("payment plan is referenced by payment orders")
 	ErrAccountVersionConflict = errors.New("account version conflict")
 	ErrIdempotencyKeyConflict = errors.New("idempotency key was already used with a different request")
 	ErrAccountAlreadyExists   = errors.New("account username already exists")

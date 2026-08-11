@@ -20,6 +20,7 @@ type ViewData struct {
 	CSRFToken       string
 	Error           string
 	Message         string
+	PlanEdit        PlanEditData
 	Accounts        []sqlite.Account
 	Account         sqlite.Account
 	Invites         []sqlite.InviteCode
@@ -36,6 +37,16 @@ type ViewData struct {
 	ActivationPlans []sqlite.PaymentPlan
 	RenewalPlans    []sqlite.PaymentPlan
 	PaymentOrder    sqlite.PaymentOrder
+}
+
+// PlanEditData contains the editable catalog fields and the original plan metadata.
+type PlanEditData struct {
+	Plan         sqlite.PaymentPlan
+	Name         string
+	DurationDays string
+	Price        string
+	Note         string
+	Submitted    bool
 }
 
 // TimeZoneOption is a selectable time zone for the settings page.

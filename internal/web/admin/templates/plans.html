@@ -107,17 +107,11 @@
                   <input type="hidden" name="enabled" value="{{if .Enabled}}false{{else}}true{{end}}">
                   <button class="secondary" type="submit">{{if .Enabled}}下架{{else}}上架{{end}}</button>
                 </form>
-                <details class="inline-edit">
-                  <summary>编辑</summary>
-                  <form method="post" action="/admin/plans/{{.ID}}/update" class="plan-edit-form">
-                    <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-                    <label class="field">名称<input name="name" value="{{.Name}}" required></label>
-                    <label class="field">天数<input name="duration_days" type="number" min="1" max="3650" value="{{.DurationDays}}" required></label>
-                    <label class="field">价格<input name="price" type="number" min="0.01" step="0.01" value="{{formatPriceInput .PriceFen}}" required></label>
-                    <label class="field">说明<input name="note" value="{{.Note}}"></label>
-                    <button type="submit">保存</button>
-                  </form>
-                </details>
+                <a class="plan-edit-link" href="/admin/plans/{{.ID}}/edit">编辑方案</a>
+                <form method="post" action="/admin/plans/{{.ID}}/delete" class="inline" data-confirm="确定删除方案“{{.Name}}”吗？没有支付订单引用时才会删除。">
+                  <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                  <button class="danger" type="submit">删除</button>
+                </form>
               </div>
             </td>
           </tr>
@@ -155,17 +149,11 @@
                   <input type="hidden" name="enabled" value="{{if .Enabled}}false{{else}}true{{end}}">
                   <button class="secondary" type="submit">{{if .Enabled}}下架{{else}}上架{{end}}</button>
                 </form>
-                <details class="inline-edit">
-                  <summary>编辑</summary>
-                  <form method="post" action="/admin/plans/{{.ID}}/update" class="plan-edit-form">
-                    <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-                    <label class="field">名称<input name="name" value="{{.Name}}" required></label>
-                    <label class="field">天数<input name="duration_days" type="number" min="1" max="3650" value="{{.DurationDays}}" required></label>
-                    <label class="field">价格<input name="price" type="number" min="0.01" step="0.01" value="{{formatPriceInput .PriceFen}}" required></label>
-                    <label class="field">说明<input name="note" value="{{.Note}}"></label>
-                    <button type="submit">保存</button>
-                  </form>
-                </details>
+                <a class="plan-edit-link" href="/admin/plans/{{.ID}}/edit">编辑方案</a>
+                <form method="post" action="/admin/plans/{{.ID}}/delete" class="inline" data-confirm="确定删除方案“{{.Name}}”吗？没有支付订单引用时才会删除。">
+                  <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                  <button class="danger" type="submit">删除</button>
+                </form>
               </div>
             </td>
           </tr>

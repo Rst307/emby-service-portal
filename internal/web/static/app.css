@@ -687,15 +687,33 @@ code { color: var(--accent); font-family: var(--mono); font-size: 0.9em; }
 .plan-form-grid { grid-template-columns: 1.35fr 0.7fr 0.85fr; }
 .money-value { color: var(--accent); font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .plan-actions { align-items: flex-start; }
-.inline-edit { position: relative; }
-.inline-edit summary { display: inline-flex; align-items: center; min-height: 31px; padding: 7px 10px; border: 1px solid rgba(242, 174, 85, 0.3); border-radius: 8px; background: rgba(242, 174, 85, 0.045); color: var(--text); font-size: 0.79rem; cursor: pointer; list-style: none; }
-.inline-edit summary::-webkit-details-marker { display: none; }
-.inline-edit[open] summary { border-color: var(--border-strong); background: var(--accent-soft); }
-.plan-edit-form { position: absolute; right: 0; z-index: 5; display: grid; grid-template-columns: repeat(2, minmax(130px, 1fr)); gap: 10px; width: min(420px, 72vw); margin-top: 7px; padding: 14px; border: 1px solid var(--border-strong); border-radius: 12px; background: var(--surface-raised); box-shadow: 0 20px 45px rgba(0, 0, 0, 0.42); }
-.plan-edit-form .field { gap: 5px; font-size: 0.72rem; }
-.plan-edit-form .field input { padding: 8px 9px; font-size: 0.82rem; }
-.plan-edit-form button { grid-column: 1 / -1; justify-self: end; padding: 8px 13px; font-size: 0.8rem; }
-
+.plan-edit-link, .plan-back-link, .plan-cancel-link { display: inline-flex; align-items: center; justify-content: center; border: 1px solid rgba(242, 174, 85, 0.3); border-radius: 8px; background: rgba(242, 174, 85, 0.045); color: var(--text); text-decoration: none; transition: background 0.16s ease, border-color 0.16s ease, transform 0.16s ease; }
+.plan-edit-link { min-height: 31px; padding: 7px 10px; font-size: 0.79rem; white-space: nowrap; }
+.plan-edit-link:hover, .plan-back-link:hover, .plan-cancel-link:hover { border-color: var(--border-strong); background: var(--accent-soft); color: var(--text); transform: translateY(-1px); }
+.plan-edit-heading { align-items: end; }
+.plan-back-link { padding: 10px 14px; font-size: 0.82rem; font-weight: 750; }
+.plan-editor-layout { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.75fr); gap: 16px; align-items: start; }
+.plan-editor-panel { min-width: 0; }
+.plan-editor-heading-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; width: 100%; }
+.plan-editor-heading-row .panel-copy { margin-bottom: 0; }
+.plan-editor-form { display: grid; gap: 20px; }
+.plan-editor-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(130px, 0.65fr) minmax(150px, 0.8fr); gap: 15px; align-items: end; }
+.plan-editor-grid .field { gap: 6px; }
+.field-hint { color: var(--faint); font-size: 0.7rem; font-weight: 500; line-height: 1.35; }
+.plan-editor-grid input { min-height: 46px; }
+.plan-editor-price input { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.price-input-wrap { position: relative; display: block; }
+.price-input-wrap > span { position: absolute; top: 50%; left: 13px; z-index: 1; color: var(--accent); font-family: var(--mono); font-size: 1rem; font-weight: 800; transform: translateY(-50%); }
+.price-input-wrap input { padding-left: 32px; }
+.plan-editor-form textarea { min-height: 112px; resize: vertical; }
+.plan-editor-actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; padding-top: 5px; border-top: 1px solid var(--border); }
+.plan-cancel-link { padding: 10px 16px; font-size: 0.86rem; font-weight: 750; }
+.plan-editor-guide .panel-body { display: grid; gap: 18px; }
+.plan-editor-preview { display: grid; gap: 5px; padding: 16px; border: 1px solid rgba(242, 174, 85, 0.25); border-radius: 11px; background: linear-gradient(145deg, rgba(54, 39, 25, 0.82), rgba(20, 25, 29, 0.92)); }
+.plan-editor-preview strong { color: var(--text); font-family: var(--display); font-size: 1.2rem; }
+.plan-editor-preview > span:last-child { color: var(--accent); font-family: var(--mono); font-size: 0.86rem; font-weight: 750; }
+.plan-editor-rules { display: grid; gap: 13px; margin: 0; padding: 0 0 0 18px; color: var(--muted); font-size: 0.82rem; }
+.plan-editor-rules li::marker { color: var(--accent); }
 .public-plan-list { display: grid; gap: 9px; margin-top: 22px; }
 .public-plan-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px 14px; padding: 13px; border: 1px solid var(--border); border-left: 2px solid transparent; border-radius: 11px; background: rgba(8, 11, 15, 0.38); transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease; }
 .public-plan-card:hover { border-color: rgba(242, 174, 85, 0.4); border-left-color: var(--accent); background: var(--surface-soft); transform: translateX(2px); }
@@ -808,6 +826,7 @@ dialog form { padding: 24px; }
   .nav-links::-webkit-scrollbar-thumb { border-radius: 99px; background: var(--surface-soft); }
   .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .plan-create-grid { grid-template-columns: 1fr; }
+  .plan-editor-layout { grid-template-columns: 1fr; }
   .data-panel .table-wrap { position: relative; }
   .data-panel table { min-width: 760px; }
   .data-panel th:last-child, .data-panel td:last-child { position: sticky; right: 0; z-index: 2; background: var(--surface); box-shadow: -10px 0 18px rgba(9, 11, 15, 0.22); }
@@ -832,6 +851,11 @@ dialog form { padding: 24px; }
   .logout-form button { padding: 7px 10px; }
   .page-heading { min-height: 0; margin-bottom: 20px; padding-left: 17px; }
   .page-title { font-size: clamp(1.7rem, 9vw, 2.25rem); }
+  .plan-edit-heading { align-items: stretch; }
+  .plan-back-link { align-self: flex-start; }
+  .plan-editor-grid { grid-template-columns: 1fr; }
+  .plan-editor-actions { flex-direction: column-reverse; align-items: stretch; }
+  .plan-editor-actions button, .plan-cancel-link { width: 100%; }
   .stat-card { min-height: 103px; padding: 16px; }
   .stat-card.total .stat-value { font-size: 2rem; }
   .hero-card { padding: 20px; }
@@ -846,9 +870,6 @@ dialog form { padding: 24px; }
   .public-plan-card button, .renewal-plan-list .public-plan-card button { grid-row: auto; width: 100%; }
   .renewal-plan-list .public-plan-action { grid-row: auto; }
   .renewal-plan-list .plan-account-field { grid-column: auto; }
-  .plan-edit-form { position: static; width: 100%; margin-top: 8px; }
-  .inline-edit { width: 100%; }
-  .inline-edit summary { justify-content: center; width: 100%; }
   .plan-actions { align-items: stretch; flex-direction: column; }
   .quick-link span { text-align: left; }
   .batch-status-tools { align-items: stretch; flex-direction: column; }

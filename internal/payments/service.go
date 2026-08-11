@@ -186,6 +186,14 @@ func (s *Service) ListPlans(ctx context.Context, kind string, enabledOnly bool) 
 	return s.store.ListPaymentPlans(ctx, kind, enabledOnly)
 }
 
+func (s *Service) FindPlan(ctx context.Context, id int64) (sqlite.PaymentPlan, error) {
+	return s.store.FindPaymentPlan(ctx, id)
+}
+
+func (s *Service) DeletePlan(ctx context.Context, id int64) error {
+	return s.store.DeletePaymentPlan(ctx, id)
+}
+
 func (s *Service) CreatePlan(ctx context.Context, input sqlite.CreatePaymentPlanInput) (sqlite.PaymentPlan, error) {
 	if err := validatePlan(input.Kind, input.Name, input.DurationDays, input.PriceFen, input.Note); err != nil {
 		return sqlite.PaymentPlan{}, err
