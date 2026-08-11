@@ -47,3 +47,5 @@ _Avoid_: hidden account field
 **禁用**:
 The state in which login is denied by setting the linked Emby 用户's `IsDisabled` policy to true. It does not delete the user or their Emby data.
 _Avoid_: deletion, removal
+
+模块职责与数据归属见 `docs/DOMAIN.md`，架构决策见 `docs/adr/`。

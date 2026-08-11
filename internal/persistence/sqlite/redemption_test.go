@@ -5,6 +5,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/Rst307/emby-service-portal/internal/domain"
 )
 
 func TestListInvitesIncludesTheBusinessAccountThatUsedTheCode(t *testing.T) {
@@ -16,11 +18,11 @@ func TestListInvitesIncludesTheBusinessAccountThatUsedTheCode(t *testing.T) {
 	defer store.Close()
 
 	now := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
-	account, err := store.CreateAccount(ctx, Account{EmbyUserID: "emby-alice", Username: "alice", Status: "active", ExpiresAt: now.Add(time.Hour), CreatedAt: now, UpdatedAt: now})
+	account, err := store.CreateAccount(ctx, domain.Account{EmbyUserID: "emby-alice", Username: "alice", Status: "active", ExpiresAt: now.Add(time.Hour), CreatedAt: now, UpdatedAt: now})
 	if err != nil {
 		t.Fatal(err)
 	}
-	invite, err := store.CreateInvite(ctx, InviteCode{CodeHash: "invite-hash", Code: "ESP-ACT-test", CodePrefix: "ESP-ACT", DurationDays: 1, DurationMinutes: 24 * 60, MaxUses: 1, Enabled: true, CreatedAt: now})
+	invite, err := store.CreateInvite(ctx, domain.InviteCode{CodeHash: "invite-hash", Code: "ESP-ACT-test", CodePrefix: "ESP-ACT", DurationDays: 1, DurationMinutes: 24 * 60, MaxUses: 1, Enabled: true, CreatedAt: now})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,14 +54,14 @@ func TestRedeemRenewalAtomicallyExtendsEveryConcurrentRedemption(t *testing.T) {
 	defer store.Close()
 
 	createdAt := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
-	account, err := store.CreateAccount(ctx, Account{
+	account, err := store.CreateAccount(ctx, domain.Account{
 		EmbyUserID: "emby-alice", Username: "alice", Status: "active",
 		ExpiresAt: createdAt, CreatedAt: createdAt, UpdatedAt: createdAt,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	invite, err := store.CreateInvite(ctx, InviteCode{
+	invite, err := store.CreateInvite(ctx, domain.InviteCode{
 		CodeHash: "invite-hash", CodePrefix: "ESP-test", DurationDays: 1, DurationMinutes: 60,
 		MaxUses: 2, Enabled: true, CreatedAt: createdAt,
 	})
@@ -75,7 +77,7 @@ func TestRedeemRenewalAtomicallyExtendsEveryConcurrentRedemption(t *testing.T) {
 		go func() {
 			defer wait.Done()
 			<-start
-			_, err := store.RedeemRenewal(ctx, RedeemRenewalInput{
+			_, err := store.RedeemRenewal(ctx, domain.RedeemRenewalInput{
 				CodeHash: "invite-hash", Username: "alice", RedeemedAt: createdAt,
 			})
 			errs <- err

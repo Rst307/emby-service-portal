@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Rst307/emby-service-portal/internal/domain"
 	"github.com/Rst307/emby-service-portal/internal/payments"
-	"github.com/Rst307/emby-service-portal/internal/persistence/sqlite"
 	"github.com/Rst307/emby-service-portal/internal/web/admin"
 )
 
@@ -44,7 +44,7 @@ func (s *Server) planCreate(w http.ResponseWriter, r *http.Request) {
 		err = daysErr
 	}
 	if err == nil {
-		_, err = s.payments.CreatePlan(r.Context(), sqlite.CreatePaymentPlanInput{Kind: r.Form.Get("kind"), Name: r.Form.Get("name"), DurationDays: days, PriceFen: price, Note: r.Form.Get("note"), SortOrder: 0})
+		_, err = s.payments.CreatePlan(r.Context(), domain.CreatePaymentPlanInput{Kind: r.Form.Get("kind"), Name: r.Form.Get("name"), DurationDays: days, PriceFen: price, Note: r.Form.Get("note"), SortOrder: 0})
 	}
 	if err != nil {
 		s.renderPlans(w, r, http.StatusBadRequest, "创建套餐失败："+err.Error(), "")
@@ -53,7 +53,7 @@ func (s *Server) planCreate(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/admin/plans?message="+url.QueryEscape("套餐已添加"), http.StatusSeeOther)
 }
 
-func planEditData(plan sqlite.PaymentPlan) admin.PlanEditData {
+func planEditData(plan domain.PaymentPlan) admin.PlanEditData {
 	return admin.PlanEditData{
 		Plan:         plan,
 		Name:         plan.Name,
@@ -126,7 +126,7 @@ func (s *Server) planUpdate(w http.ResponseWriter, r *http.Request) {
 		err = daysErr
 	}
 	if err == nil {
-		_, err = s.payments.UpdatePlan(r.Context(), id, sqlite.UpdatePaymentPlanInput{Name: form.Name, DurationDays: days, PriceFen: price, Note: form.Note, SortOrder: plan.SortOrder})
+		_, err = s.payments.UpdatePlan(r.Context(), id, domain.UpdatePaymentPlanInput{Name: form.Name, DurationDays: days, PriceFen: price, Note: form.Note, SortOrder: plan.SortOrder})
 	}
 	if err != nil {
 		s.renderPlanEdit(w, r, http.StatusBadRequest, "保存方案失败："+err.Error(), form)
@@ -169,7 +169,7 @@ func (s *Server) planDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		message := "删除方案失败"
-		if errors.Is(err, sqlite.ErrPaymentPlanInUse) {
+		if errors.Is(err, domain.ErrPaymentPlanInUse) {
 			message = "该方案已有支付订单，不能删除；如不再销售，请使用下架"
 		} else if errors.Is(err, sql.ErrNoRows) {
 			message = "方案不存在或已经删除"

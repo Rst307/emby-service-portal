@@ -5,7 +5,7 @@ package web
 import (
 	"net/http"
 
-	"github.com/Rst307/emby-service-portal/internal/persistence/sqlite"
+	"github.com/Rst307/emby-service-portal/internal/domain"
 	"github.com/Rst307/emby-service-portal/internal/web/admin"
 )
 
@@ -55,7 +55,7 @@ func (s *Server) renew(w http.ResponseWriter, r *http.Request) {
 	if !s.allowAttempt(w, r, s.publicLimit, username) {
 		return
 	}
-	var account sqlite.Account
+	var account domain.Account
 	var err error
 	if authenticated {
 		account, err = s.invites.RenewForAccount(r.Context(), r.Form.Get("code"), portalAccount.ID)

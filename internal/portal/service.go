@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Rst307/emby-service-portal/internal/domain"
 	"github.com/Rst307/emby-service-portal/internal/emby"
 	"github.com/Rst307/emby-service-portal/internal/persistence/sqlite"
 )
@@ -47,22 +48,22 @@ func (s *Service) Login(ctx context.Context, username, password string) (string,
 		return "", err
 	}
 	now := time.Now().UTC()
-	if err := s.store.CreateUserSession(ctx, sqlite.UserSession{ID: hash(token)[:22], AccountID: account.ID, TokenHash: hash(token), CreatedAt: now, ExpiresAt: now.Add(s.ttl)}); err != nil {
+	if err := s.store.CreateUserSession(ctx, domain.UserSession{ID: hash(token)[:22], AccountID: account.ID, TokenHash: hash(token), CreatedAt: now, ExpiresAt: now.Add(s.ttl)}); err != nil {
 		return "", fmt.Errorf("create portal session: %w", err)
 	}
 	return token, nil
 }
-func (s *Service) Account(ctx context.Context, tokenValue string) (sqlite.Account, bool) {
+func (s *Service) Account(ctx context.Context, tokenValue string) (domain.Account, bool) {
 	if tokenValue == "" {
-		return sqlite.Account{}, false
+		return domain.Account{}, false
 	}
 	session, err := s.store.FindUserSessionByTokenHash(ctx, hash(tokenValue))
 	if err != nil || !session.ExpiresAt.After(time.Now()) {
-		return sqlite.Account{}, false
+		return domain.Account{}, false
 	}
 	account, err := s.store.FindAccount(ctx, session.AccountID)
 	if err != nil || account.Status != "active" || !account.ExpiresAt.After(time.Now()) {
-		return sqlite.Account{}, false
+		return domain.Account{}, false
 	}
 	return account, true
 }

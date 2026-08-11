@@ -15,6 +15,7 @@ import (
 
 	"github.com/Rst307/emby-service-portal/internal/accounts"
 	"github.com/Rst307/emby-service-portal/internal/credentials"
+	"github.com/Rst307/emby-service-portal/internal/domain"
 	"github.com/Rst307/emby-service-portal/internal/invites"
 	"github.com/Rst307/emby-service-portal/internal/paymentcenter"
 	"github.com/Rst307/emby-service-portal/internal/persistence/sqlite"
@@ -197,11 +198,11 @@ func (s *Service) providerConfig(ctx context.Context) (paymentcenter.Config, err
 	return cfg, nil
 }
 
-func (s *Service) ListPlans(ctx context.Context, kind string, enabledOnly bool) ([]sqlite.PaymentPlan, error) {
+func (s *Service) ListPlans(ctx context.Context, kind string, enabledOnly bool) ([]domain.PaymentPlan, error) {
 	return s.store.ListPaymentPlans(ctx, kind, enabledOnly)
 }
 
-func (s *Service) ListOrders(ctx context.Context, filter sqlite.PaymentOrderFilter) (sqlite.PaymentOrderPage, error) {
+func (s *Service) ListOrders(ctx context.Context, filter domain.PaymentOrderFilter) (domain.PaymentOrderPage, error) {
 	if filter.Status != "" && !isPaymentOrderStatus(filter.Status) {
 		filter.Status = ""
 	}
@@ -224,7 +225,7 @@ func isPaymentOrderStatus(status string) bool {
 	}
 }
 
-func (s *Service) FindPlan(ctx context.Context, id int64) (sqlite.PaymentPlan, error) {
+func (s *Service) FindPlan(ctx context.Context, id int64) (domain.PaymentPlan, error) {
 	return s.store.FindPaymentPlan(ctx, id)
 }
 
@@ -232,9 +233,9 @@ func (s *Service) DeletePlan(ctx context.Context, id int64) error {
 	return s.store.DeletePaymentPlan(ctx, id)
 }
 
-func (s *Service) CreatePlan(ctx context.Context, input sqlite.CreatePaymentPlanInput) (sqlite.PaymentPlan, error) {
+func (s *Service) CreatePlan(ctx context.Context, input domain.CreatePaymentPlanInput) (domain.PaymentPlan, error) {
 	if err := validatePlan(input.Kind, input.Name, input.DurationDays, input.PriceFen, input.Note); err != nil {
-		return sqlite.PaymentPlan{}, err
+		return domain.PaymentPlan{}, err
 	}
 	if input.DurationMinutes == 0 {
 		input.DurationMinutes = input.DurationDays * 24 * 60
@@ -242,13 +243,13 @@ func (s *Service) CreatePlan(ctx context.Context, input sqlite.CreatePaymentPlan
 	return s.store.CreatePaymentPlan(ctx, input, s.now().UTC())
 }
 
-func (s *Service) UpdatePlan(ctx context.Context, id int64, input sqlite.UpdatePaymentPlanInput) (sqlite.PaymentPlan, error) {
+func (s *Service) UpdatePlan(ctx context.Context, id int64, input domain.UpdatePaymentPlanInput) (domain.PaymentPlan, error) {
 	plan, err := s.store.FindPaymentPlan(ctx, id)
 	if err != nil {
-		return sqlite.PaymentPlan{}, err
+		return domain.PaymentPlan{}, err
 	}
 	if err := validatePlan(plan.Kind, input.Name, input.DurationDays, input.PriceFen, input.Note); err != nil {
-		return sqlite.PaymentPlan{}, err
+		return domain.PaymentPlan{}, err
 	}
 	if input.DurationMinutes == 0 {
 		input.DurationMinutes = input.DurationDays * 24 * 60
@@ -276,7 +277,7 @@ func validatePlan(kind, name string, days, price int, _ string) error {
 	return nil
 }
 
-func (s *Service) CreateActivationOrder(ctx context.Context, planID int64, buyerInfo ...string) (sqlite.PaymentOrder, error) {
+func (s *Service) CreateActivationOrder(ctx context.Context, planID int64, buyerInfo ...string) (domain.PaymentOrder, error) {
 	buyer := ""
 	if len(buyerInfo) > 0 {
 		buyer = buyerInfo[0]
@@ -284,14 +285,14 @@ func (s *Service) CreateActivationOrder(ctx context.Context, planID int64, buyer
 	return s.createOrder(ctx, KindActivation, planID, nil, "", buyer)
 }
 
-func (s *Service) CreateRenewalOrder(ctx context.Context, planID int64, username, password string) (sqlite.PaymentOrder, error) {
+func (s *Service) CreateRenewalOrder(ctx context.Context, planID int64, username, password string) (domain.PaymentOrder, error) {
 	username = strings.TrimSpace(username)
 	if err := s.accounts.VerifyPassword(ctx, username, password); err != nil {
-		return sqlite.PaymentOrder{}, errors.New("用户名或密码错误")
+		return domain.PaymentOrder{}, errors.New("用户名或密码错误")
 	}
 	account, err := s.store.FindAccountByUsername(ctx, username)
 	if err != nil {
-		return sqlite.PaymentOrder{}, errors.New("账号不存在")
+		return domain.PaymentOrder{}, errors.New("账号不存在")
 	}
 	return s.createOrder(ctx, KindRenewal, planID, &account.ID, account.Username, account.Username)
 }
@@ -299,57 +300,57 @@ func (s *Service) CreateRenewalOrder(ctx context.Context, planID int64, username
 // CreateRenewalOrderForAccount creates a paid renewal order for the account
 // identified by an authenticated portal session. The caller never supplies an
 // account ID from the form; the web layer obtains it from the server session.
-func (s *Service) CreateRenewalOrderForAccount(ctx context.Context, planID, accountID int64) (sqlite.PaymentOrder, error) {
+func (s *Service) CreateRenewalOrderForAccount(ctx context.Context, planID, accountID int64) (domain.PaymentOrder, error) {
 	account, err := s.store.FindAccount(ctx, accountID)
 	if errors.Is(err, sql.ErrNoRows) {
-		return sqlite.PaymentOrder{}, errors.New("账号不存在")
+		return domain.PaymentOrder{}, errors.New("账号不存在")
 	}
 	if err != nil {
-		return sqlite.PaymentOrder{}, err
+		return domain.PaymentOrder{}, err
 	}
 	if account.Status != "active" && account.Status != "expired" {
-		return sqlite.PaymentOrder{}, errors.New("账号当前不可续费")
+		return domain.PaymentOrder{}, errors.New("账号当前不可续费")
 	}
 	return s.createOrder(ctx, KindRenewal, planID, &account.ID, account.Username, account.Username)
 }
 
-func (s *Service) createOrder(ctx context.Context, kind string, planID int64, accountID *int64, username, buyerInfo string) (sqlite.PaymentOrder, error) {
+func (s *Service) createOrder(ctx context.Context, kind string, planID int64, accountID *int64, username, buyerInfo string) (domain.PaymentOrder, error) {
 	buyerInfo = strings.TrimSpace(buyerInfo)
 	if len(buyerInfo) > 200 {
-		return sqlite.PaymentOrder{}, errors.New("购买人或联系方式不能超过 200 个字符")
+		return domain.PaymentOrder{}, errors.New("购买人或联系方式不能超过 200 个字符")
 	}
 	cfg, err := s.providerConfig(ctx)
 	if err != nil {
-		return sqlite.PaymentOrder{}, err
+		return domain.PaymentOrder{}, err
 	}
 	plan, err := s.store.FindPaymentPlan(ctx, planID)
 	if err != nil || !plan.Enabled || plan.Kind != kind {
-		return sqlite.PaymentOrder{}, ErrPlanNotAvailable
+		return domain.PaymentOrder{}, ErrPlanNotAvailable
 	}
 	view, err := s.Settings(ctx)
 	if err != nil {
-		return sqlite.PaymentOrder{}, err
+		return domain.PaymentOrder{}, err
 	}
 	now := s.now().UTC()
 	merchantNo, err := newMerchantOrderNo()
 	if err != nil {
-		return sqlite.PaymentOrder{}, err
+		return domain.PaymentOrder{}, err
 	}
 	publicToken, err := newPublicToken()
 	if err != nil {
-		return sqlite.PaymentOrder{}, err
+		return domain.PaymentOrder{}, err
 	}
 	returnURL, err := resolveReturnURL(view.ReturnURL, publicToken, merchantNo)
 	if err != nil {
-		return sqlite.PaymentOrder{}, err
+		return domain.PaymentOrder{}, err
 	}
-	localOrder, err := s.store.CreatePaymentOrder(ctx, sqlite.CreatePaymentOrderInput{
+	localOrder, err := s.store.CreatePaymentOrder(ctx, domain.CreatePaymentOrderInput{
 		PublicToken: publicToken, MerchantOrderNo: merchantNo, Kind: kind, PlanID: plan.ID, PlanName: plan.Name,
 		AccountID: accountID, AccountUsername: username, BuyerInfo: buyerInfo, DurationDays: plan.DurationDays, DurationMinutes: plan.DurationMinutes,
 		AmountFen: plan.PriceFen, Currency: "CNY", ExpiresAt: now.Add(time.Duration(view.OrderTTLMinutes) * time.Minute), Now: now,
 	})
 	if err != nil {
-		return sqlite.PaymentOrder{}, err
+		return domain.PaymentOrder{}, err
 	}
 	providerOrder, err := s.center.CreateOrder(ctx, cfg, paymentcenter.CreateOrderInput{MerchantOrderNo: merchantNo, AmountFen: plan.PriceFen, Currency: "CNY", Subject: plan.Name, ExpiresInSeconds: view.OrderTTLMinutes * 60, Note: providerOrderNote(kind, username, buyerInfo), ReturnURL: returnURL})
 	if err != nil {
@@ -359,9 +360,9 @@ func (s *Service) createOrder(ctx context.Context, kind string, planID int64, ac
 		return localOrder, errors.New("支付中心返回的订单信息与本地套餐不一致")
 	}
 	expiresAt := parseProviderTime(providerOrder.ExpiresAt, localOrder.ExpiresAt)
-	localOrder, err = s.store.UpdatePaymentProvider(ctx, sqlite.UpdatePaymentProviderInput{OrderID: localOrder.ID, ProviderStatus: providerOrder.Status, PaymentURL: providerOrder.PaymentURL, PaymentMemo: providerOrder.PaymentMemo, ExpiresAt: expiresAt, Now: now})
+	localOrder, err = s.store.UpdatePaymentProvider(ctx, domain.UpdatePaymentProviderInput{OrderID: localOrder.ID, ProviderStatus: providerOrder.Status, PaymentURL: providerOrder.PaymentURL, PaymentMemo: providerOrder.PaymentMemo, ExpiresAt: expiresAt, Now: now})
 	if err != nil {
-		return sqlite.PaymentOrder{}, err
+		return domain.PaymentOrder{}, err
 	}
 	if providerOrder.Status == "PAID" {
 		return s.fulfill(ctx, localOrder, paymentcenter.Notification{EventID: "provider-paid-" + merchantNo, MerchantOrderNo: merchantNo, AmountFen: providerOrder.AmountFen, Currency: providerOrder.Currency, PaidAt: parseProviderTime(providerOrder.PaidAt, now), PaymentIdempotencyKey: "provider-paid-" + merchantNo})
@@ -391,10 +392,10 @@ func isProviderCanceled(status string) bool {
 	return status == "CANCELED" || status == "CANCELLED"
 }
 
-func (s *Service) PublicOrder(ctx context.Context, token string) (sqlite.PaymentOrder, error) {
+func (s *Service) PublicOrder(ctx context.Context, token string) (domain.PaymentOrder, error) {
 	order, err := s.store.FindPaymentOrderByToken(ctx, token)
 	if err != nil {
-		return sqlite.PaymentOrder{}, err
+		return domain.PaymentOrder{}, err
 	}
 	if order.PaymentStatus == "pending" && !order.ExpiresAt.After(s.now()) {
 		_ = s.store.SetPaymentOrderState(ctx, order.ID, "expired", "EXPIRED", "订单已过期", s.now().UTC())
@@ -420,11 +421,11 @@ func (s *Service) HandleWebhook(ctx context.Context, headers http.Header, body [
 	return err
 }
 
-func (s *Service) fulfill(ctx context.Context, order sqlite.PaymentOrder, notification paymentcenter.Notification) (sqlite.PaymentOrder, error) {
+func (s *Service) fulfill(ctx context.Context, order domain.PaymentOrder, notification paymentcenter.Notification) (domain.PaymentOrder, error) {
 	return s.fulfillWithHash(ctx, order, notification)
 }
 
-func (s *Service) fulfillWithHash(ctx context.Context, order sqlite.PaymentOrder, notification paymentcenter.Notification) (sqlite.PaymentOrder, error) {
+func (s *Service) fulfillWithHash(ctx context.Context, order domain.PaymentOrder, notification paymentcenter.Notification) (domain.PaymentOrder, error) {
 	if order.FulfillmentStatus == "completed" {
 		return s.store.FindPaymentOrder(ctx, order.ID)
 	}
@@ -433,12 +434,12 @@ func (s *Service) fulfillWithHash(ctx context.Context, order sqlite.PaymentOrder
 		var err error
 		activationCode, err = invites.NewActivationCode()
 		if err != nil {
-			return sqlite.PaymentOrder{}, err
+			return domain.PaymentOrder{}, err
 		}
 		activationHash = invites.HashCode(activationCode)
 		prefix = activationCode[:8]
 	}
-	return s.store.FulfillPaymentOrder(ctx, sqlite.FulfillPaymentOrderInput{
+	return s.store.FulfillPaymentOrder(ctx, domain.FulfillPaymentOrderInput{
 		OrderID: order.ID, EventID: notification.EventID, EventType: "order.paid", AmountFen: notification.AmountFen,
 		Currency: notification.Currency, ProviderPaymentKey: notification.PaymentIdempotencyKey, PayloadHash: notification.PayloadHash,
 		PaidAt: notification.PaidAt, Now: s.now().UTC(), ActivationCode: activationCode, ActivationCodeHash: activationHash, ActivationCodePrefix: prefix,

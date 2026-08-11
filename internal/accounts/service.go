@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Rst307/emby-service-portal/internal/credentials"
+	"github.com/Rst307/emby-service-portal/internal/domain"
 	"github.com/Rst307/emby-service-portal/internal/emby"
 	"github.com/Rst307/emby-service-portal/internal/persistence/sqlite"
 )
@@ -22,9 +23,9 @@ var (
 	ErrExpiredAccount                  = errors.New("cannot enable an expired account")
 	ErrNotFound                        = errors.New("account not found")
 	ErrInvalidCredentials              = errors.New("invalid account credentials")
-	ErrConflict                        = sqlite.ErrAccountVersionConflict
+	ErrConflict                        = domain.ErrAccountVersionConflict
 	ErrIdempotencyKeyRequired          = errors.New("idempotency key is required")
-	ErrIdempotencyKeyConflict          = sqlite.ErrIdempotencyKeyConflict
+	ErrIdempotencyKeyConflict          = domain.ErrIdempotencyKeyConflict
 	ErrProvisioningRecoveryUnavailable = errors.New("cannot safely recover uncertain Emby user creation")
 )
 
@@ -75,25 +76,25 @@ func New(store *sqlite.Store, embyClient emby.Client, vault *credentials.Vault) 
 	return &Service{store: store, emby: embyClient, vault: vault, now: time.Now}
 }
 
-func (s *Service) Create(ctx context.Context, input CreateInput) (sqlite.Account, error) {
+func (s *Service) Create(ctx context.Context, input CreateInput) (domain.Account, error) {
 	input.Username = strings.TrimSpace(input.Username)
 	if input.Username == "" {
-		return sqlite.Account{}, ErrInvalidUsername
+		return domain.Account{}, ErrInvalidUsername
 	}
 	if len(input.Password) < 8 {
-		return sqlite.Account{}, ErrInvalidPassword
+		return domain.Account{}, ErrInvalidPassword
 	}
 	if input.ExpiresAt.IsZero() {
-		return sqlite.Account{}, fmt.Errorf("expiry time is required")
+		return domain.Account{}, fmt.Errorf("expiry time is required")
 	}
 	user, err := s.emby.CreateUser(ctx, input.Username, input.Password)
 	if err != nil {
-		return sqlite.Account{}, err
+		return domain.Account{}, err
 	}
 	if restrict, ok := s.emby.(emby.PolicyRestricter); ok {
 		if err := restrict.RestrictUserMediaFeatures(ctx, user.ID); err != nil {
 			_ = s.emby.DeleteUser(ctx, user.ID)
-			return sqlite.Account{}, fmt.Errorf("restrict Emby media features: %w", err)
+			return domain.Account{}, fmt.Errorf("restrict Emby media features: %w", err)
 		}
 	}
 	now := s.now().UTC()
@@ -105,19 +106,19 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (sqlite.Account
 	}
 	ciphertext, err := s.vault.Seal(input.Username, input.Password)
 	if err != nil {
-		return sqlite.Account{}, fmt.Errorf("encrypt password: %w", err)
+		return domain.Account{}, fmt.Errorf("encrypt password: %w", err)
 	}
-	account, err := s.store.CreateAccount(ctx, sqlite.Account{EmbyUserID: user.ID, Username: input.Username, Status: status, ExpiresAt: input.ExpiresAt.UTC(), Note: strings.TrimSpace(input.Note), CreatedAt: now, UpdatedAt: now, DisabledAt: disabledAt})
+	account, err := s.store.CreateAccount(ctx, domain.Account{EmbyUserID: user.ID, Username: input.Username, Status: status, ExpiresAt: input.ExpiresAt.UTC(), Note: strings.TrimSpace(input.Note), CreatedAt: now, UpdatedAt: now, DisabledAt: disabledAt})
 	if err != nil {
-		return sqlite.Account{}, fmt.Errorf("record Emby user %q: %w", input.Username, err)
+		return domain.Account{}, fmt.Errorf("record Emby user %q: %w", input.Username, err)
 	}
 	if err := s.store.SaveAccountPassword(ctx, account.ID, ciphertext, now); err != nil {
-		return sqlite.Account{}, fmt.Errorf("save encrypted password: %w", err)
+		return domain.Account{}, fmt.Errorf("save encrypted password: %w", err)
 	}
 	if account.Status != "active" {
 		account, err = s.store.SetAccountStatus(ctx, account, account.Status, account.DisabledAt, now)
 		if err != nil {
-			return sqlite.Account{}, fmt.Errorf("queue initial Emby access policy: %w", err)
+			return domain.Account{}, fmt.Errorf("queue initial Emby access policy: %w", err)
 		}
 	}
 	return account, nil
@@ -126,64 +127,64 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (sqlite.Account
 // CreateIdempotent durably records an API account-create request before
 // calling Emby. Retrying a key resumes its operation rather than reissuing a
 // remote create or making a second local business account.
-func (s *Service) CreateIdempotent(ctx context.Context, idempotencyKey string, input CreateInput) (sqlite.Account, error) {
+func (s *Service) CreateIdempotent(ctx context.Context, idempotencyKey string, input CreateInput) (domain.Account, error) {
 	idempotencyKey, err := validIdempotencyKey(idempotencyKey)
 	if err != nil {
-		return sqlite.Account{}, err
+		return domain.Account{}, err
 	}
 	input, err = normalizedCreateInput(input)
 	if err != nil {
-		return sqlite.Account{}, err
+		return domain.Account{}, err
 	}
 	ciphertext, err := s.vault.Seal(input.Username, input.Password)
 	if err != nil {
-		return sqlite.Account{}, fmt.Errorf("encrypt password: %w", err)
+		return domain.Account{}, fmt.Errorf("encrypt password: %w", err)
 	}
 	fingerprint, err := s.vault.Fingerprint("account_create", input.Username, input.Password, timestampInput(input.ExpiresAt), input.Note)
 	if err != nil {
-		return sqlite.Account{}, fmt.Errorf("fingerprint account create: %w", err)
+		return domain.Account{}, fmt.Errorf("fingerprint account create: %w", err)
 	}
-	operation, err := s.store.BeginAccountCreateOperation(ctx, sqlite.BeginAccountCreateOperationInput{
+	operation, err := s.store.BeginAccountCreateOperation(ctx, domain.BeginAccountCreateOperationInput{
 		Kind: "account_create", IdempotencyKey: idempotencyKey, RequestFingerprint: fingerprint,
 		Username: input.Username, PasswordCiphertext: ciphertext, ExpiresAt: input.ExpiresAt, Note: input.Note, Now: s.now().UTC(),
 	})
 	if err != nil {
-		return sqlite.Account{}, err
+		return domain.Account{}, err
 	}
 	return s.provisionAccountCreate(ctx, operation)
 }
 
 // RegisterIdempotent is the registration half of the durable provisioning
 // saga. inviteCodeHash must be a one-way hash of the submitted raw invite.
-func (s *Service) RegisterIdempotent(ctx context.Context, idempotencyKey, inviteCodeHash, username, password string) (sqlite.Account, error) {
+func (s *Service) RegisterIdempotent(ctx context.Context, idempotencyKey, inviteCodeHash, username, password string) (domain.Account, error) {
 	idempotencyKey, err := validIdempotencyKey(idempotencyKey)
 	if err != nil {
-		return sqlite.Account{}, err
+		return domain.Account{}, err
 	}
 	input, err := normalizedCredentials(username, password)
 	if err != nil {
-		return sqlite.Account{}, err
+		return domain.Account{}, err
 	}
 	ciphertext, err := s.vault.Seal(input.Username, input.Password)
 	if err != nil {
-		return sqlite.Account{}, fmt.Errorf("encrypt password: %w", err)
+		return domain.Account{}, fmt.Errorf("encrypt password: %w", err)
 	}
 	fingerprint, err := s.vault.Fingerprint("register", inviteCodeHash, input.Username, input.Password)
 	if err != nil {
-		return sqlite.Account{}, fmt.Errorf("fingerprint registration: %w", err)
+		return domain.Account{}, fmt.Errorf("fingerprint registration: %w", err)
 	}
-	operation, err := s.store.BeginRegistrationOperation(ctx, sqlite.BeginRegistrationOperationInput{
-		BeginAccountCreateOperationInput: sqlite.BeginAccountCreateOperationInput{
+	operation, err := s.store.BeginRegistrationOperation(ctx, domain.BeginRegistrationOperationInput{
+		BeginAccountCreateOperationInput: domain.BeginAccountCreateOperationInput{
 			Kind: "register", IdempotencyKey: idempotencyKey, RequestFingerprint: fingerprint,
 			Username: input.Username, PasswordCiphertext: ciphertext, Note: "", Now: s.now().UTC(),
 		},
 		InviteCodeHash: inviteCodeHash,
 	})
-	if errors.Is(err, sqlite.ErrInviteNotRedeemable) {
-		return sqlite.Account{}, err
+	if errors.Is(err, domain.ErrInviteNotRedeemable) {
+		return domain.Account{}, err
 	}
 	if err != nil {
-		return sqlite.Account{}, err
+		return domain.Account{}, err
 	}
 	return s.provisionAccountCreate(ctx, operation)
 }
@@ -205,7 +206,7 @@ func (s *Service) RecoverAccountCreates(ctx context.Context) error {
 	return firstErr
 }
 
-func (s *Service) provisionAccountCreate(ctx context.Context, operation sqlite.AccountCreateOperation) (sqlite.Account, error) {
+func (s *Service) provisionAccountCreate(ctx context.Context, operation domain.AccountCreateOperation) (domain.Account, error) {
 	// The durable state resolves restarts; this in-process guard also prevents
 	// two simultaneous HTTP retries from both acting on a stale pending row.
 	s.provisionMu.Lock()
@@ -213,21 +214,21 @@ func (s *Service) provisionAccountCreate(ctx context.Context, operation sqlite.A
 	var err error
 	operation, err = s.store.FindAccountCreateOperation(ctx, operation.ID)
 	if err != nil {
-		return sqlite.Account{}, err
+		return domain.Account{}, err
 	}
 	if operation.Status == "completed" {
 		return s.store.CompleteAccountCreateOperation(ctx, operation.ID, s.now().UTC())
 	}
 	password, err := s.vault.Open(operation.Username, operation.PasswordCiphertext)
 	if err != nil {
-		return sqlite.Account{}, fmt.Errorf("decrypt provisioning password: %w", err)
+		return domain.Account{}, fmt.Errorf("decrypt provisioning password: %w", err)
 	}
 	remoteUserID := operation.EmbyUserID
 	if remoteUserID == "" {
 		createNow := operation.Status == "pending"
 		if createNow {
 			if err := s.store.MarkAccountCreateOperationCreating(ctx, operation.ID, s.now().UTC()); err != nil {
-				return sqlite.Account{}, fmt.Errorf("checkpoint Emby create attempt: %w", err)
+				return domain.Account{}, fmt.Errorf("checkpoint Emby create attempt: %w", err)
 			}
 		}
 		var user emby.User
@@ -235,13 +236,13 @@ func (s *Service) provisionAccountCreate(ctx context.Context, operation sqlite.A
 		if !createNow {
 			finder, ok := s.emby.(emby.UserFinder)
 			if !ok {
-				return sqlite.Account{}, ErrProvisioningRecoveryUnavailable
+				return domain.Account{}, ErrProvisioningRecoveryUnavailable
 			}
 			user, err = finder.FindUserByUsername(ctx, operation.Username)
 			if err == nil {
 				foundByLookup = true
 			} else if !errors.Is(err, emby.ErrUserNotFound) {
-				return sqlite.Account{}, fmt.Errorf("find Emby user %q: %w", operation.Username, err)
+				return domain.Account{}, fmt.Errorf("find Emby user %q: %w", operation.Username, err)
 			}
 		}
 		if !foundByLookup {
@@ -249,32 +250,32 @@ func (s *Service) provisionAccountCreate(ctx context.Context, operation sqlite.A
 			if err != nil {
 				// The creating checkpoint deliberately remains. The outcome may be
 				// unknown, so a later retry must look up the name before retrying.
-				return sqlite.Account{}, err
+				return domain.Account{}, err
 			}
 		}
 		if user.ID == "" {
-			return sqlite.Account{}, fmt.Errorf("emby user creation returned no user ID")
+			return domain.Account{}, fmt.Errorf("emby user creation returned no user ID")
 		}
 		if foundByLookup {
 			if setter, ok := s.emby.(emby.PasswordSetter); ok {
 				if err := setter.SetUserPassword(ctx, user.ID, password); err != nil {
-					return sqlite.Account{}, fmt.Errorf("restore Emby password: %w", err)
+					return domain.Account{}, fmt.Errorf("restore Emby password: %w", err)
 				}
 			}
 		}
 		remoteUserID = user.ID
 		if err := s.store.SaveAccountCreateOperationRemote(ctx, operation.ID, remoteUserID, s.now().UTC()); err != nil {
-			return sqlite.Account{}, fmt.Errorf("checkpoint Emby user: %w", err)
+			return domain.Account{}, fmt.Errorf("checkpoint Emby user: %w", err)
 		}
 	}
 	if restrict, ok := s.emby.(emby.PolicyRestricter); ok {
 		if err := restrict.RestrictUserMediaFeatures(ctx, remoteUserID); err != nil {
-			return sqlite.Account{}, fmt.Errorf("restrict Emby media features: %w", err)
+			return domain.Account{}, fmt.Errorf("restrict Emby media features: %w", err)
 		}
 	}
 	account, err := s.store.CompleteAccountCreateOperation(ctx, operation.ID, s.now().UTC())
 	if err != nil {
-		return sqlite.Account{}, fmt.Errorf("finalize account provisioning: %w", err)
+		return domain.Account{}, fmt.Errorf("finalize account provisioning: %w", err)
 	}
 	return account, nil
 }
@@ -313,7 +314,7 @@ func validIdempotencyKey(value string) (string, error) {
 
 func timestampInput(value time.Time) string { return value.UTC().Format(time.RFC3339Nano) }
 
-func (s *Service) List(ctx context.Context) ([]sqlite.Account, error) {
+func (s *Service) List(ctx context.Context) ([]domain.Account, error) {
 	return s.store.ListAccounts(ctx)
 }
 func (s *Service) SyncFromEmby(ctx context.Context, input SyncInput) (int, error) {
@@ -359,7 +360,7 @@ func (s *Service) SyncFromEmby(ctx context.Context, input SyncInput) (int, error
 				return imported, err
 			}
 		}
-		account, err := s.store.CreateAccount(ctx, sqlite.Account{EmbyUserID: user.ID, Username: user.Username, Status: status, ExpiresAt: input.ExpiresAt.UTC(), Note: strings.TrimSpace(input.Note), CreatedAt: now, UpdatedAt: now, DisabledAt: disabledAt})
+		account, err := s.store.CreateAccount(ctx, domain.Account{EmbyUserID: user.ID, Username: user.Username, Status: status, ExpiresAt: input.ExpiresAt.UTC(), Note: strings.TrimSpace(input.Note), CreatedAt: now, UpdatedAt: now, DisabledAt: disabledAt})
 		if err != nil {
 			return imported, err
 		}
@@ -422,10 +423,10 @@ func (s *Service) Password(ctx context.Context, id int64) (string, error) {
 	}
 	return s.vault.Open(account.Username, ciphertext)
 }
-func (s *Service) Get(ctx context.Context, id int64) (sqlite.Account, error) {
+func (s *Service) Get(ctx context.Context, id int64) (domain.Account, error) {
 	account, err := s.store.FindAccount(ctx, id)
 	if errors.Is(err, sql.ErrNoRows) {
-		return sqlite.Account{}, ErrNotFound
+		return domain.Account{}, ErrNotFound
 	}
 	return account, err
 }
@@ -445,7 +446,7 @@ func (s *Service) Batch(ctx context.Context, input BatchInput) (int, error) {
 		return 0, errors.New("invalid batch expiry value")
 	}
 
-	accounts := make([]sqlite.Account, 0, len(ids))
+	accounts := make([]domain.Account, 0, len(ids))
 	for _, id := range ids {
 		account, err := s.Get(ctx, id)
 		if err != nil {
@@ -503,16 +504,16 @@ func uniqueAccountIDs(ids []int64) ([]int64, error) {
 	return result, nil
 }
 
-func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) (sqlite.Account, error) {
+func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) (domain.Account, error) {
 	account, err := s.Get(ctx, id)
 	if err != nil {
-		return sqlite.Account{}, err
+		return domain.Account{}, err
 	}
 	if err := checkVersion(account, input.Version); err != nil {
-		return sqlite.Account{}, err
+		return domain.Account{}, err
 	}
 	if input.ExpiresAt.IsZero() {
-		return sqlite.Account{}, fmt.Errorf("expiry time is required")
+		return domain.Account{}, fmt.Errorf("expiry time is required")
 	}
 	account.ExpiresAt = input.ExpiresAt.UTC()
 	account.Note = strings.TrimSpace(input.Note)
@@ -523,7 +524,7 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) (sqli
 	}
 	account, err = s.store.UpdateAccount(ctx, account)
 	if err != nil {
-		return sqlite.Account{}, err
+		return domain.Account{}, err
 	}
 	return account, nil
 }
@@ -560,7 +561,7 @@ func (s *Service) Enable(ctx context.Context, id int64, version ...int64) error 
 	return err
 }
 
-func checkVersion(account sqlite.Account, expected int64) error {
+func checkVersion(account domain.Account, expected int64) error {
 	if expected != 0 && expected != account.Version {
 		return ErrConflict
 	}

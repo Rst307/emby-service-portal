@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Rst307/emby-service-portal/internal/domain"
 	"github.com/Rst307/emby-service-portal/internal/emby"
 	"github.com/Rst307/emby-service-portal/internal/persistence/sqlite"
 )
@@ -52,11 +53,11 @@ func (r *Runner) RunOnce(ctx context.Context) error {
 	return errors.Join(failures...)
 }
 
-func (r *Runner) expireDue(ctx context.Context, due []sqlite.Account, now time.Time) []error {
+func (r *Runner) expireDue(ctx context.Context, due []domain.Account, now time.Time) []error {
 	var failures []error
 	for _, account := range due {
 		if _, err := r.store.SetAccountStatus(ctx, account, "expired", &now, now); err != nil {
-			if errors.Is(err, sqlite.ErrAccountVersionConflict) {
+			if errors.Is(err, domain.ErrAccountVersionConflict) {
 				// A renewal or admin edit won the race after this scan. It has
 				// recorded a newer desired state, so never queue a stale disable.
 				continue

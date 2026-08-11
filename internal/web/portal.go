@@ -3,7 +3,7 @@ package web
 import (
 	"net/http"
 
-	"github.com/Rst307/emby-service-portal/internal/persistence/sqlite"
+	"github.com/Rst307/emby-service-portal/internal/domain"
 	"github.com/Rst307/emby-service-portal/internal/web/admin"
 )
 
@@ -49,10 +49,10 @@ func (s *Server) portalLogout(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{Name: userSessionCookie, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: s.cookieSecure, SameSite: http.SameSiteLaxMode})
 	http.Redirect(w, r, "/portal/login", http.StatusSeeOther)
 }
-func (s *Server) portalAccount(r *http.Request) (sqlite.Account, bool) {
+func (s *Server) portalAccount(r *http.Request) (domain.Account, bool) {
 	cookie, err := r.Cookie(userSessionCookie)
 	if err != nil {
-		return sqlite.Account{}, false
+		return domain.Account{}, false
 	}
 	return s.portal.Account(r.Context(), cookie.Value)
 }

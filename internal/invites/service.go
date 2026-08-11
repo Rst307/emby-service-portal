@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Rst307/emby-service-portal/internal/accounts"
+	"github.com/Rst307/emby-service-portal/internal/domain"
 	"github.com/Rst307/emby-service-portal/internal/persistence/sqlite"
 )
 
@@ -33,7 +34,7 @@ type CreateInput struct {
 	Note                                   string
 }
 type CreatedCode struct {
-	Invite sqlite.InviteCode
+	Invite domain.InviteCode
 	Code   string
 }
 
@@ -60,13 +61,13 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (CreatedCode, e
 		return CreatedCode{}, err
 	}
 	now := s.now().UTC()
-	invite, err := s.store.CreateInvite(ctx, sqlite.InviteCode{CodeHash: hash(code), Code: code, CodePrefix: code[:8], DurationDays: input.DurationDays, DurationMinutes: input.DurationMinutes, MaxUses: input.MaxUses, StartsAt: utc(input.StartsAt), ExpiresAt: utc(input.ExpiresAt), Enabled: true, Note: strings.TrimSpace(input.Note), CreatedAt: now})
+	invite, err := s.store.CreateInvite(ctx, domain.InviteCode{CodeHash: hash(code), Code: code, CodePrefix: code[:8], DurationDays: input.DurationDays, DurationMinutes: input.DurationMinutes, MaxUses: input.MaxUses, StartsAt: utc(input.StartsAt), ExpiresAt: utc(input.ExpiresAt), Enabled: true, Note: strings.TrimSpace(input.Note), CreatedAt: now})
 	if err != nil {
 		return CreatedCode{}, err
 	}
 	return CreatedCode{Invite: invite, Code: code}, nil
 }
-func (s *Service) List(ctx context.Context) ([]sqlite.InviteCode, error) {
+func (s *Service) List(ctx context.Context) ([]domain.InviteCode, error) {
 	return s.store.ListInvites(ctx)
 }
 func (s *Service) SetEnabled(ctx context.Context, id int64, enabled bool) error {
@@ -74,19 +75,19 @@ func (s *Service) SetEnabled(ctx context.Context, id int64, enabled bool) error 
 }
 func (s *Service) Delete(ctx context.Context, id int64) error { return s.store.DeleteInvite(ctx, id) }
 
-func (s *Service) Register(ctx context.Context, code, username, password string) (sqlite.Account, error) {
+func (s *Service) Register(ctx context.Context, code, username, password string) (domain.Account, error) {
 	now := s.now().UTC()
 	invite, err := s.consume(ctx, code, now)
 	if err != nil {
-		return sqlite.Account{}, err
+		return domain.Account{}, err
 	}
 	account, err := s.accounts.Create(ctx, accounts.CreateInput{Username: username, Password: password, ExpiresAt: now.Add(time.Duration(invite.DurationMinutes) * time.Minute)})
 	if err != nil {
 		_ = s.store.ReleaseInvite(ctx, invite.ID)
-		return sqlite.Account{}, err
+		return domain.Account{}, err
 	}
 	if err := s.store.RecordRedemption(ctx, invite.ID, account.ID, "register", invite.DurationDays, invite.DurationMinutes, now); err != nil {
-		return sqlite.Account{}, err
+		return domain.Account{}, err
 	}
 	return account, nil
 }
@@ -94,20 +95,20 @@ func (s *Service) Register(ctx context.Context, code, username, password string)
 // RegisterIdempotent records the invite reservation and account provisioning
 // under one idempotency key. Replaying the API request resumes that saga even
 // after the invite would otherwise be exhausted or expired.
-func (s *Service) RegisterIdempotent(ctx context.Context, idempotencyKey, code, username, password string) (sqlite.Account, error) {
+func (s *Service) RegisterIdempotent(ctx context.Context, idempotencyKey, code, username, password string) (domain.Account, error) {
 	account, err := s.accounts.RegisterIdempotent(ctx, idempotencyKey, hash(strings.TrimSpace(code)), username, password)
-	if errors.Is(err, sqlite.ErrInviteNotRedeemable) {
-		return sqlite.Account{}, ErrUnavailable
+	if errors.Is(err, domain.ErrInviteNotRedeemable) {
+		return domain.Account{}, ErrUnavailable
 	}
 	return account, err
 }
 
-func (s *Service) Renew(ctx context.Context, code, username, password string) (sqlite.Account, error) {
+func (s *Service) Renew(ctx context.Context, code, username, password string) (domain.Account, error) {
 	if err := s.accounts.VerifyPassword(ctx, username, password); err != nil {
 		if errors.Is(err, accounts.ErrNotFound) {
-			return sqlite.Account{}, accounts.ErrNotFound
+			return domain.Account{}, accounts.ErrNotFound
 		}
-		return sqlite.Account{}, ErrUnavailable
+		return domain.Account{}, ErrUnavailable
 	}
 	return s.redeemRenewal(ctx, code, username)
 }
@@ -115,43 +116,43 @@ func (s *Service) Renew(ctx context.Context, code, username, password string) (s
 // RenewForAccount redeems an invite for an already authenticated portal
 // session. The account ID comes from the server-side session, not from a form
 // field, so the caller does not need to resubmit the managed password.
-func (s *Service) RenewForAccount(ctx context.Context, code string, accountID int64) (sqlite.Account, error) {
+func (s *Service) RenewForAccount(ctx context.Context, code string, accountID int64) (domain.Account, error) {
 	account, err := s.store.FindAccount(ctx, accountID)
 	if errors.Is(err, sql.ErrNoRows) {
-		return sqlite.Account{}, accounts.ErrNotFound
+		return domain.Account{}, accounts.ErrNotFound
 	}
 	if err != nil {
-		return sqlite.Account{}, err
+		return domain.Account{}, err
 	}
 	if account.Status != "active" && account.Status != "expired" {
-		return sqlite.Account{}, ErrUnavailable
+		return domain.Account{}, ErrUnavailable
 	}
 	return s.redeemRenewal(ctx, code, account.Username)
 }
 
-func (s *Service) redeemRenewal(ctx context.Context, code, username string) (sqlite.Account, error) {
-	result, err := s.store.RedeemRenewal(ctx, sqlite.RedeemRenewalInput{
+func (s *Service) redeemRenewal(ctx context.Context, code, username string) (domain.Account, error) {
+	result, err := s.store.RedeemRenewal(ctx, domain.RedeemRenewalInput{
 		CodeHash:   hash(strings.TrimSpace(code)),
 		Username:   strings.TrimSpace(username),
 		RedeemedAt: s.now().UTC(),
 	})
 	switch {
-	case errors.Is(err, sqlite.ErrInviteNotRedeemable):
-		return sqlite.Account{}, ErrUnavailable
+	case errors.Is(err, domain.ErrInviteNotRedeemable):
+		return domain.Account{}, ErrUnavailable
 	case errors.Is(err, sql.ErrNoRows):
-		return sqlite.Account{}, accounts.ErrNotFound
+		return domain.Account{}, accounts.ErrNotFound
 	case err != nil:
-		return sqlite.Account{}, fmt.Errorf("redeem renewal: %w", err)
+		return domain.Account{}, fmt.Errorf("redeem renewal: %w", err)
 	}
 	// RedeemRenewal atomically queues any required access restoration. The
 	// expiry runner owns all Emby policy calls, so a committed renewal never
 	// performs a remote side effect before its durable local state is visible.
 	return result.Account, nil
 }
-func (s *Service) consume(ctx context.Context, code string, now time.Time) (sqlite.InviteCode, error) {
+func (s *Service) consume(ctx context.Context, code string, now time.Time) (domain.InviteCode, error) {
 	invite, err := s.store.ConsumeInvite(ctx, hash(strings.TrimSpace(code)), now)
 	if errors.Is(err, sql.ErrNoRows) || err != nil {
-		return sqlite.InviteCode{}, ErrUnavailable
+		return domain.InviteCode{}, ErrUnavailable
 	}
 	return invite, nil
 }

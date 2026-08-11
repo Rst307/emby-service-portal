@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/Rst307/emby-service-portal/internal/credentials"
+	"github.com/Rst307/emby-service-portal/internal/domain"
 	"github.com/Rst307/emby-service-portal/internal/paymentcenter"
 	"github.com/Rst307/emby-service-portal/internal/persistence/sqlite"
 )
@@ -61,7 +62,7 @@ func TestActivationOrderIsFulfilledFromVerifiedPaymentCenterCallback(t *testing.
 	if err := service.UpdateSettings(ctx, UpdatePaymentSettingsInput{BaseURL: server.URL, AppID: "app_test", AppSecret: secret, CallbackURL: "http://127.0.0.1/webhooks/wxpay-payment-center", ReturnURL: "https://user.example/payment/{token}?order={order_no}", OrderTTLMinutes: 15}); err != nil {
 		t.Fatal(err)
 	}
-	plan, err := service.CreatePlan(ctx, sqlite.CreatePaymentPlanInput{Kind: KindActivation, Name: "月卡", DurationDays: 30, PriceFen: 990})
+	plan, err := service.CreatePlan(ctx, domain.CreatePaymentPlanInput{Kind: KindActivation, Name: "月卡", DurationDays: 30, PriceFen: 990})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +134,7 @@ func TestReconcileCancelsLocallyExpiredRPayOrder(t *testing.T) {
 	if err := service.UpdateSettings(ctx, UpdatePaymentSettingsInput{BaseURL: server.URL, AppID: "app_test", AppSecret: secret, CallbackURL: "http://127.0.0.1/webhooks/wxpay-payment-center", OrderTTLMinutes: 15}); err != nil {
 		t.Fatal(err)
 	}
-	plan, err := service.CreatePlan(ctx, sqlite.CreatePaymentPlanInput{Kind: KindActivation, Name: "月卡", DurationDays: 30, PriceFen: 990})
+	plan, err := service.CreatePlan(ctx, domain.CreatePaymentPlanInput{Kind: KindActivation, Name: "月卡", DurationDays: 30, PriceFen: 990})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +182,7 @@ func TestRenewalOrderForAuthenticatedAccountSkipsPasswordVerification(t *testing
 		t.Fatal(err)
 	}
 	defer store.Close()
-	account, err := store.CreateAccount(ctx, sqlite.Account{EmbyUserID: "emby-user", Username: "alice", Status: "active", ExpiresAt: now.Add(24 * time.Hour), CreatedAt: now, UpdatedAt: now})
+	account, err := store.CreateAccount(ctx, domain.Account{EmbyUserID: "emby-user", Username: "alice", Status: "active", ExpiresAt: now.Add(24 * time.Hour), CreatedAt: now, UpdatedAt: now})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +193,7 @@ func TestRenewalOrderForAuthenticatedAccountSkipsPasswordVerification(t *testing
 	if err := service.UpdateSettings(ctx, UpdatePaymentSettingsInput{BaseURL: server.URL, AppID: "app_test", AppSecret: secret, CallbackURL: "http://127.0.0.1/webhooks/wxpay-payment-center", OrderTTLMinutes: 15}); err != nil {
 		t.Fatal(err)
 	}
-	plan, err := service.CreatePlan(ctx, sqlite.CreatePaymentPlanInput{Kind: KindRenewal, Name: "月卡续费", DurationDays: 30, PriceFen: 990})
+	plan, err := service.CreatePlan(ctx, domain.CreatePaymentPlanInput{Kind: KindRenewal, Name: "月卡续费", DurationDays: 30, PriceFen: 990})
 	if err != nil {
 		t.Fatal(err)
 	}

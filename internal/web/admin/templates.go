@@ -10,8 +10,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Rst307/emby-service-portal/internal/domain"
 	"github.com/Rst307/emby-service-portal/internal/payments"
-	"github.com/Rst307/emby-service-portal/internal/persistence/sqlite"
 )
 
 //go:embed templates/*.html
@@ -22,9 +22,9 @@ type ViewData struct {
 	Error             string
 	Message           string
 	PlanEdit          PlanEditData
-	Accounts          []sqlite.Account
-	Account           sqlite.Account
-	Invites           []sqlite.InviteCode
+	Accounts          []domain.Account
+	Account           domain.Account
+	Invites           []domain.InviteCode
 	NewInviteCode     string
 	AccountCount      int
 	ActiveCount       int
@@ -38,10 +38,10 @@ type ViewData struct {
 	TimeZoneNow       string
 	TimeZoneOptions   []TimeZoneOption
 	PaymentSettings   payments.PaymentSettings
-	ActivationPlans   []sqlite.PaymentPlan
-	RenewalPlans      []sqlite.PaymentPlan
-	PaymentOrder      sqlite.PaymentOrder
-	PaymentOrders     []sqlite.PaymentOrder
+	ActivationPlans   []domain.PaymentPlan
+	RenewalPlans      []domain.PaymentPlan
+	PaymentOrder      domain.PaymentOrder
+	PaymentOrders     []domain.PaymentOrder
 	OrderTotal        int
 	OrderPaidCount    int
 	OrderPaidFen      int
@@ -57,7 +57,7 @@ type ViewData struct {
 
 // PlanEditData contains the editable catalog fields and the original plan metadata.
 type PlanEditData struct {
-	Plan         sqlite.PaymentPlan
+	Plan         domain.PaymentPlan
 	Name         string
 	DurationDays string
 	Price        string
@@ -165,7 +165,7 @@ func NewTemplates(location *time.Location) (*Templates, error) {
 				return active
 			}
 		},
-		"orderBuyer": func(order sqlite.PaymentOrder) string {
+		"orderBuyer": func(order domain.PaymentOrder) string {
 			if order.BuyerInfo != "" {
 				return order.BuyerInfo
 			}

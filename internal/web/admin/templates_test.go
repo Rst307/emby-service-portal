@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Rst307/emby-service-portal/internal/persistence/sqlite"
+	"github.com/Rst307/emby-service-portal/internal/domain"
 )
 
 func TestRenderDashboardShowsAccountStats(t *testing.T) {
@@ -32,7 +32,7 @@ func TestRenderAccountsUsesChineseStatusLabels(t *testing.T) {
 		t.Fatal(err)
 	}
 	response := httptest.NewRecorder()
-	templates.Render(response, "accounts", ViewData{Accounts: []sqlite.Account{
+	templates.Render(response, "accounts", ViewData{Accounts: []domain.Account{
 		{ID: 1, Version: 2, Username: "alice", Status: "active", ExpiresAt: time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC), Note: ""},
 		{ID: 2, Version: 1, Username: "bob", Status: "disabled", ExpiresAt: time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)},
 		{ID: 3, Version: 1, Username: "carol", Status: "expired", ExpiresAt: time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)},
@@ -54,8 +54,8 @@ func TestRenderInvitesShowsCreatedCodeAndHumanizedDuration(t *testing.T) {
 		t.Fatal(err)
 	}
 	response := httptest.NewRecorder()
-	templates.Render(response, "invites", ViewData{NewInviteCode: "ESP-test-code-123", Invites: []sqlite.InviteCode{
-		{ID: 1, CodePrefix: "ESP-TEST", Code: "ESP-test-code-123", DurationMinutes: 30 * 24 * 60, MaxUses: 1, UsedCount: 1, Enabled: true, Redemptions: []sqlite.InviteRedemption{{AccountUsername: "alice", Kind: "register", RedeemedAt: time.Date(2030, 1, 2, 3, 4, 0, 0, time.UTC)}}},
+	templates.Render(response, "invites", ViewData{NewInviteCode: "ESP-test-code-123", Invites: []domain.InviteCode{
+		{ID: 1, CodePrefix: "ESP-TEST", Code: "ESP-test-code-123", DurationMinutes: 30 * 24 * 60, MaxUses: 1, UsedCount: 1, Enabled: true, Redemptions: []domain.InviteRedemption{{AccountUsername: "alice", Kind: "register", RedeemedAt: time.Date(2030, 1, 2, 3, 4, 0, 0, time.UTC)}}},
 		{ID: 2, CodePrefix: "ESP-OLD", DurationMinutes: 45, MaxUses: 0, Enabled: false},
 	}})
 	page := response.Body.String()
@@ -75,7 +75,7 @@ func TestRenderPortalDashboardShowsChineseStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 	response := httptest.NewRecorder()
-	templates.Render(response, "portal-dashboard", ViewData{Account: sqlite.Account{Username: "alice", Status: "expired", ExpiresAt: time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC), Note: "VIP"}})
+	templates.Render(response, "portal-dashboard", ViewData{Account: domain.Account{Username: "alice", Status: "expired", ExpiresAt: time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC), Note: "VIP"}})
 	page := response.Body.String()
 	for _, marker := range []string{"你好，alice", "badge expired\">已过期", "2030-01-01 00:00", "href=\"/purchase\">购买激活码", "href=\"/renew\">续费订阅", "需要办理什么？", "退出登录"} {
 		if !strings.Contains(page, marker) {
@@ -91,8 +91,8 @@ func TestRenderRenewHidesCredentialsForPortalAccount(t *testing.T) {
 	}
 	response := httptest.NewRecorder()
 	templates.Render(response, "renew", ViewData{
-		Account:      sqlite.Account{ID: 7, Username: "alice", Status: "active"},
-		RenewalPlans: []sqlite.PaymentPlan{{ID: 3, Kind: "renewal", Name: "月度续费", DurationDays: 30, PriceFen: 990, Enabled: true}},
+		Account:      domain.Account{ID: 7, Username: "alice", Status: "active"},
+		RenewalPlans: []domain.PaymentPlan{{ID: 3, Kind: "renewal", Name: "月度续费", DurationDays: 30, PriceFen: 990, Enabled: true}},
 	})
 	page := response.Body.String()
 	for _, marker := range []string{"当前登录账号无需再次输入用户名和密码", "当前账号：alice", "无需再次输入用户名和密码", "为当前账号续费"} {
@@ -115,7 +115,7 @@ func TestRenderFormatsTimesInConfiguredLocation(t *testing.T) {
 		t.Fatal(err)
 	}
 	response := httptest.NewRecorder()
-	templates.Render(response, "accounts", ViewData{Accounts: []sqlite.Account{{ExpiresAt: time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)}}})
+	templates.Render(response, "accounts", ViewData{Accounts: []domain.Account{{ExpiresAt: time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)}}})
 	page := response.Body.String()
 	if response.Code != http.StatusOK || !strings.Contains(page, "2030-01-01 08:00") || !strings.Contains(page, "data-expires-at=\"2030-01-01T08:00\"") || !strings.Contains(page, "Asia/Shanghai") {
 		t.Fatalf("configured time zone was not rendered: %s", page)
@@ -139,8 +139,8 @@ func TestRenderPlansShowsBothSaleKinds(t *testing.T) {
 	}
 	response := httptest.NewRecorder()
 	templates.Render(response, "plans", ViewData{
-		ActivationPlans: []sqlite.PaymentPlan{{ID: 1, Kind: "activation", Name: "月卡激活", DurationDays: 30, PriceFen: 990, Enabled: true}},
-		RenewalPlans:    []sqlite.PaymentPlan{{ID: 2, Kind: "renewal", Name: "季度续费", DurationDays: 90, PriceFen: 2490, Enabled: false}},
+		ActivationPlans: []domain.PaymentPlan{{ID: 1, Kind: "activation", Name: "月卡激活", DurationDays: 30, PriceFen: 990, Enabled: true}},
+		RenewalPlans:    []domain.PaymentPlan{{ID: 2, Kind: "renewal", Name: "季度续费", DurationDays: 90, PriceFen: 2490, Enabled: false}},
 	})
 	page := response.Body.String()
 	for _, marker := range []string{"售卖方案", "月卡激活", "¥9.90", "季度续费", "¥24.90", "已下架", "/admin/plans/2/toggle", "/admin/plans/2/edit", "/admin/plans/2/delete"} {
@@ -156,7 +156,7 @@ func TestRenderPlanEditShowsFocusedEditor(t *testing.T) {
 		t.Fatal(err)
 	}
 	response := httptest.NewRecorder()
-	templates.Render(response, "plan-edit", ViewData{CSRFToken: "csrf", PlanEdit: PlanEditData{Plan: sqlite.PaymentPlan{ID: 2, Kind: "renewal", Name: "季度续费", DurationDays: 90, PriceFen: 2490, Enabled: true}}})
+	templates.Render(response, "plan-edit", ViewData{CSRFToken: "csrf", PlanEdit: PlanEditData{Plan: domain.PaymentPlan{ID: 2, Kind: "renewal", Name: "季度续费", DurationDays: 90, PriceFen: 2490, Enabled: true}}})
 	page := response.Body.String()
 	for _, marker := range []string{"把方案信息写清楚", "方案名称", "订阅时长（天）", "售价（元）", "保存方案", "当前方案", "已经创建的订单"} {
 		if !strings.Contains(page, marker) {
@@ -172,7 +172,7 @@ func TestRenderOrdersShowsBuyerAndSearchControls(t *testing.T) {
 	}
 	response := httptest.NewRecorder()
 	templates.Render(response, "orders", ViewData{
-		CSRFToken: "csrf", PaymentOrders: []sqlite.PaymentOrder{{ID: 7, MerchantOrderNo: "ESP-ORDER-7", PublicToken: "token-7", Kind: "activation", PlanName: "月卡", DurationMinutes: 30 * 24 * 60, BuyerInfo: "张三 / wx-z3", AmountFen: 990, Currency: "CNY", PaymentStatus: "paid", FulfillmentStatus: "completed", CreatedAt: time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)}}, OrderTotal: 1, OrderPaidCount: 1, OrderPaidFen: 990, OrderPage: 1, OrderPageSize: 20,
+		CSRFToken: "csrf", PaymentOrders: []domain.PaymentOrder{{ID: 7, MerchantOrderNo: "ESP-ORDER-7", PublicToken: "token-7", Kind: "activation", PlanName: "月卡", DurationMinutes: 30 * 24 * 60, BuyerInfo: "张三 / wx-z3", AmountFen: 990, Currency: "CNY", PaymentStatus: "paid", FulfillmentStatus: "completed", CreatedAt: time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)}}, OrderTotal: 1, OrderPaidCount: 1, OrderPaidFen: 990, OrderPage: 1, OrderPageSize: 20,
 	})
 	page := response.Body.String()
 	for _, marker := range []string{"支付订单", "订单号、商品、购买人", "张三 / wx-z3", "ESP-ORDER-7", "已付款", "查询订单", "商品类型", "/payment/token-7"} {
@@ -188,7 +188,7 @@ func TestRenderPaymentShowsCheckoutAndActivationCode(t *testing.T) {
 		t.Fatal(err)
 	}
 	response := httptest.NewRecorder()
-	templates.Render(response, "payment", ViewData{PaymentOrder: sqlite.PaymentOrder{
+	templates.Render(response, "payment", ViewData{PaymentOrder: domain.PaymentOrder{
 		PublicToken: "token", MerchantOrderNo: "ESP-ORDER-1", Kind: "activation", PlanName: "月卡", AmountFen: 990,
 		PaymentStatus: "paid", FulfillmentStatus: "completed", PaymentURL: "https://pay.example/checkout", ActivationCode: "ESP-ACT-test",
 	}})

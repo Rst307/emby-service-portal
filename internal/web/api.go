@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/Rst307/emby-service-portal/internal/accounts"
+	"github.com/Rst307/emby-service-portal/internal/domain"
 	"github.com/Rst307/emby-service-portal/internal/invites"
-	"github.com/Rst307/emby-service-portal/internal/persistence/sqlite"
 )
 
 func (s *Server) apiAuthorized(r *http.Request) bool {
@@ -314,7 +314,7 @@ type accountJSON struct {
 	DisabledAt *time.Time `json:"disabled_at,omitempty"`
 }
 
-func accountJSONFrom(account sqlite.Account) accountJSON {
+func accountJSONFrom(account domain.Account) accountJSON {
 	return accountJSON{
 		ID: account.ID, Version: account.Version, EmbyUserID: account.EmbyUserID, Username: account.Username,
 		Status: account.Status, ExpiresAt: account.ExpiresAt, Note: account.Note,
@@ -322,7 +322,7 @@ func accountJSONFrom(account sqlite.Account) accountJSON {
 	}
 }
 
-func accountJSONList(accounts []sqlite.Account) []accountJSON {
+func accountJSONList(accounts []domain.Account) []accountJSON {
 	output := make([]accountJSON, 0, len(accounts))
 	for _, account := range accounts {
 		output = append(output, accountJSONFrom(account))

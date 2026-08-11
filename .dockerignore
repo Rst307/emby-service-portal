@@ -1,0 +1,10 @@
+.git
+.env
+data/
+bin/
+dist/
+coverage*.out
+*.log
+*.pid
+emby-user-manager.exe
+.github

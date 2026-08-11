@@ -8,6 +8,7 @@ import (
 
 	"github.com/Rst307/emby-service-portal/internal/accounts"
 	"github.com/Rst307/emby-service-portal/internal/credentials"
+	"github.com/Rst307/emby-service-portal/internal/domain"
 	"github.com/Rst307/emby-service-portal/internal/emby"
 	"github.com/Rst307/emby-service-portal/internal/persistence/sqlite"
 )
@@ -30,7 +31,7 @@ func TestRenewForAuthenticatedAccountDoesNotNeedPassword(t *testing.T) {
 	defer store.Close()
 
 	now := time.Now().UTC()
-	account, err := store.CreateAccount(ctx, sqlite.Account{EmbyUserID: "renew-user", Username: "alice", Status: "active", ExpiresAt: now.Add(time.Hour), CreatedAt: now, UpdatedAt: now})
+	account, err := store.CreateAccount(ctx, domain.Account{EmbyUserID: "renew-user", Username: "alice", Status: "active", ExpiresAt: now.Add(time.Hour), CreatedAt: now, UpdatedAt: now})
 	if err != nil {
 		t.Fatal(err)
 	}

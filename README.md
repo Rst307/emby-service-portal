@@ -206,16 +206,18 @@ internal/
 ├── auth/                 管理员认证与会话
 ├── config/               环境变量配置
 ├── credentials/          加密凭据 Vault
+├── domain/               领域模型（实体、领域错误、输入/查询结构体）
 ├── emby/                 Emby HTTP 客户端
 ├── expiry/               到期和 Emby 同步 worker
 ├── invites/              邀请码及兑换
-├── persistence/sqlite/   SQLite 连接、迁移与按领域拆分的存储
+├── paymentcenter/        R Pay 支付中心 HTTP 适配器
+├── payments/             售卖方案、支付订单与履约
+├── persistence/sqlite/   SQLite 适配器（连接、迁移与按领域拆分的仓储实现）
 │   ├── sqlite.go         连接/迁移/共享工具（outbox 写入）
-│   ├── types.go          领域模型与错误
-│   ├── admins.go         管理员、会话与设置
+│   ├── admins.go         管理员、会话与设置存取
 │   ├── accounts.go       业务账号存取与乐观锁
 │   ├── saga.go           创建/注册持久化 Saga
-│   ├── invites.go        邀请码与兑换
+│   ├── invites.go        邀请码与兑换存取
 │   └── sync.go           Emby 访问同步 outbox
 ├── portal/               用户中心
 ├── ratelimit/            登录/注册/续费限流

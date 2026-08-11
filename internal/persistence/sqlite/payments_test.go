@@ -6,6 +6,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/Rst307/emby-service-portal/internal/domain"
 )
 
 func TestFulfillActivationPaymentIsIdempotent(t *testing.T) {
@@ -16,15 +18,15 @@ func TestFulfillActivationPaymentIsIdempotent(t *testing.T) {
 	}
 	defer store.Close()
 	now := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
-	plan, err := store.CreatePaymentPlan(ctx, CreatePaymentPlanInput{Kind: "activation", Name: "月卡", DurationDays: 30, DurationMinutes: 30 * 24 * 60, PriceFen: 990}, now)
+	plan, err := store.CreatePaymentPlan(ctx, domain.CreatePaymentPlanInput{Kind: "activation", Name: "月卡", DurationDays: 30, DurationMinutes: 30 * 24 * 60, PriceFen: 990}, now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	order, err := store.CreatePaymentOrder(ctx, CreatePaymentOrderInput{PublicToken: "public-token", MerchantOrderNo: "ESP-ORDER-1", Kind: "activation", PlanID: plan.ID, PlanName: plan.Name, DurationDays: 30, DurationMinutes: 30 * 24 * 60, AmountFen: 990, Currency: "CNY", ExpiresAt: now.Add(15 * time.Minute), Now: now})
+	order, err := store.CreatePaymentOrder(ctx, domain.CreatePaymentOrderInput{PublicToken: "public-token", MerchantOrderNo: "ESP-ORDER-1", Kind: "activation", PlanID: plan.ID, PlanName: plan.Name, DurationDays: 30, DurationMinutes: 30 * 24 * 60, AmountFen: 990, Currency: "CNY", ExpiresAt: now.Add(15 * time.Minute), Now: now})
 	if err != nil {
 		t.Fatal(err)
 	}
-	input := FulfillPaymentOrderInput{OrderID: order.ID, EventID: "evt-1", EventType: "order.paid", AmountFen: 990, Currency: "CNY", ProviderPaymentKey: "wechat-1", PayloadHash: "hash", PaidAt: now.Add(time.Minute), Now: now.Add(time.Minute), ActivationCode: "ESP-ACT-test-code", ActivationCodeHash: "code-hash", ActivationCodePrefix: "ESP-ACT-"}
+	input := domain.FulfillPaymentOrderInput{OrderID: order.ID, EventID: "evt-1", EventType: "order.paid", AmountFen: 990, Currency: "CNY", ProviderPaymentKey: "wechat-1", PayloadHash: "hash", PaidAt: now.Add(time.Minute), Now: now.Add(time.Minute), ActivationCode: "ESP-ACT-test-code", ActivationCodeHash: "code-hash", ActivationCodePrefix: "ESP-ACT-"}
 	fulfilled, err := store.FulfillPaymentOrder(ctx, input)
 	if err != nil {
 		t.Fatal(err)
@@ -59,7 +61,7 @@ func TestDeletePaymentPlanProtectsReferencedOrders(t *testing.T) {
 	}
 	defer store.Close()
 	now := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
-	unused, err := store.CreatePaymentPlan(ctx, CreatePaymentPlanInput{Kind: "activation", Name: "未使用方案", DurationDays: 30, PriceFen: 990}, now)
+	unused, err := store.CreatePaymentPlan(ctx, domain.CreatePaymentPlanInput{Kind: "activation", Name: "未使用方案", DurationDays: 30, PriceFen: 990}, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,14 +72,14 @@ func TestDeletePaymentPlanProtectsReferencedOrders(t *testing.T) {
 		t.Fatalf("deleted plan lookup error = %v", err)
 	}
 
-	used, err := store.CreatePaymentPlan(ctx, CreatePaymentPlanInput{Kind: "activation", Name: "已有订单方案", DurationDays: 30, PriceFen: 990}, now)
+	used, err := store.CreatePaymentPlan(ctx, domain.CreatePaymentPlanInput{Kind: "activation", Name: "已有订单方案", DurationDays: 30, PriceFen: 990}, now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.CreatePaymentOrder(ctx, CreatePaymentOrderInput{PublicToken: "delete-test-token", MerchantOrderNo: "ESP-DELETE-TEST", Kind: "activation", PlanID: used.ID, PlanName: used.Name, DurationDays: used.DurationDays, DurationMinutes: used.DurationMinutes, AmountFen: used.PriceFen, Currency: "CNY", ExpiresAt: now.Add(time.Hour), Now: now}); err != nil {
+	if _, err := store.CreatePaymentOrder(ctx, domain.CreatePaymentOrderInput{PublicToken: "delete-test-token", MerchantOrderNo: "ESP-DELETE-TEST", Kind: "activation", PlanID: used.ID, PlanName: used.Name, DurationDays: used.DurationDays, DurationMinutes: used.DurationMinutes, AmountFen: used.PriceFen, Currency: "CNY", ExpiresAt: now.Add(time.Hour), Now: now}); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.DeletePaymentPlan(ctx, used.ID); !errors.Is(err, ErrPaymentPlanInUse) {
+	if err := store.DeletePaymentPlan(ctx, used.ID); !errors.Is(err, domain.ErrPaymentPlanInUse) {
 		t.Fatalf("delete referenced plan error = %v", err)
 	}
 }
@@ -90,21 +92,21 @@ func TestListPaymentOrdersSearchesBuyerAndSummarizes(t *testing.T) {
 	}
 	defer store.Close()
 	now := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
-	plan, err := store.CreatePaymentPlan(ctx, CreatePaymentPlanInput{Kind: "activation", Name: "月卡", DurationDays: 30, DurationMinutes: 30 * 24 * 60, PriceFen: 990}, now)
+	plan, err := store.CreatePaymentPlan(ctx, domain.CreatePaymentPlanInput{Kind: "activation", Name: "月卡", DurationDays: 30, DurationMinutes: 30 * 24 * 60, PriceFen: 990}, now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, err := store.CreatePaymentOrder(ctx, CreatePaymentOrderInput{PublicToken: "buyer-token-1", MerchantOrderNo: "ESP-BUYER-1", Kind: "activation", PlanID: plan.ID, PlanName: plan.Name, BuyerInfo: "张三 / wx-z3", DurationDays: 30, DurationMinutes: 30 * 24 * 60, AmountFen: 990, Currency: "CNY", ExpiresAt: now.Add(time.Hour), Now: now})
+	first, err := store.CreatePaymentOrder(ctx, domain.CreatePaymentOrderInput{PublicToken: "buyer-token-1", MerchantOrderNo: "ESP-BUYER-1", Kind: "activation", PlanID: plan.ID, PlanName: plan.Name, BuyerInfo: "张三 / wx-z3", DurationDays: 30, DurationMinutes: 30 * 24 * 60, AmountFen: 990, Currency: "CNY", ExpiresAt: now.Add(time.Hour), Now: now})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := store.SetPaymentOrderState(ctx, first.ID, "paid", "PAID", "", now); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.CreatePaymentOrder(ctx, CreatePaymentOrderInput{PublicToken: "buyer-token-2", MerchantOrderNo: "ESP-BUYER-2", Kind: "activation", PlanID: plan.ID, PlanName: plan.Name, BuyerInfo: "李四", DurationDays: 30, DurationMinutes: 30 * 24 * 60, AmountFen: 990, Currency: "CNY", ExpiresAt: now.Add(time.Hour), Now: now}); err != nil {
+	if _, err := store.CreatePaymentOrder(ctx, domain.CreatePaymentOrderInput{PublicToken: "buyer-token-2", MerchantOrderNo: "ESP-BUYER-2", Kind: "activation", PlanID: plan.ID, PlanName: plan.Name, BuyerInfo: "李四", DurationDays: 30, DurationMinutes: 30 * 24 * 60, AmountFen: 990, Currency: "CNY", ExpiresAt: now.Add(time.Hour), Now: now}); err != nil {
 		t.Fatal(err)
 	}
-	page, err := store.ListPaymentOrders(ctx, PaymentOrderFilter{Query: "张三", Page: 1, PageSize: 20})
+	page, err := store.ListPaymentOrders(ctx, domain.PaymentOrderFilter{Query: "张三", Page: 1, PageSize: 20})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,19 +123,19 @@ func TestFulfillRenewalPaymentExtendsExpiredAccountAndQueuesAccess(t *testing.T)
 	}
 	defer store.Close()
 	now := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
-	account, err := store.CreateAccount(ctx, Account{EmbyUserID: "emby-user", Username: "alice", Status: "expired", ExpiresAt: now.Add(-time.Hour), CreatedAt: now.Add(-24 * time.Hour), UpdatedAt: now.Add(-24 * time.Hour)})
+	account, err := store.CreateAccount(ctx, domain.Account{EmbyUserID: "emby-user", Username: "alice", Status: "expired", ExpiresAt: now.Add(-time.Hour), CreatedAt: now.Add(-24 * time.Hour), UpdatedAt: now.Add(-24 * time.Hour)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := store.CreatePaymentPlan(ctx, CreatePaymentPlanInput{Kind: "renewal", Name: "续费月卡", DurationDays: 30, DurationMinutes: 30 * 24 * 60, PriceFen: 990}, now)
+	plan, err := store.CreatePaymentPlan(ctx, domain.CreatePaymentPlanInput{Kind: "renewal", Name: "续费月卡", DurationDays: 30, DurationMinutes: 30 * 24 * 60, PriceFen: 990}, now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	order, err := store.CreatePaymentOrder(ctx, CreatePaymentOrderInput{PublicToken: "renewal-token", MerchantOrderNo: "ESP-ORDER-2", Kind: "renewal", PlanID: plan.ID, PlanName: plan.Name, AccountID: &account.ID, AccountUsername: account.Username, DurationDays: 30, DurationMinutes: 30 * 24 * 60, AmountFen: 990, Currency: "CNY", ExpiresAt: now.Add(15 * time.Minute), Now: now})
+	order, err := store.CreatePaymentOrder(ctx, domain.CreatePaymentOrderInput{PublicToken: "renewal-token", MerchantOrderNo: "ESP-ORDER-2", Kind: "renewal", PlanID: plan.ID, PlanName: plan.Name, AccountID: &account.ID, AccountUsername: account.Username, DurationDays: 30, DurationMinutes: 30 * 24 * 60, AmountFen: 990, Currency: "CNY", ExpiresAt: now.Add(15 * time.Minute), Now: now})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.FulfillPaymentOrder(ctx, FulfillPaymentOrderInput{OrderID: order.ID, EventID: "evt-2", EventType: "order.paid", AmountFen: 990, Currency: "CNY", ProviderPaymentKey: "wechat-2", PaidAt: now, PayloadHash: "hash", Now: now}); err != nil {
+	if _, err := store.FulfillPaymentOrder(ctx, domain.FulfillPaymentOrderInput{OrderID: order.ID, EventID: "evt-2", EventType: "order.paid", AmountFen: 990, Currency: "CNY", ProviderPaymentKey: "wechat-2", PaidAt: now, PayloadHash: "hash", Now: now}); err != nil {
 		t.Fatal(err)
 	}
 	updated, err := store.FindAccount(ctx, account.ID)

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Rst307/emby-service-portal/internal/domain"
 	"github.com/Rst307/emby-service-portal/internal/emby"
 	"github.com/Rst307/emby-service-portal/internal/persistence/sqlite"
 )
@@ -36,7 +37,7 @@ func TestRunOnceKeepsFailedAccessSyncForRetry(t *testing.T) {
 	}
 	defer store.Close()
 	now := time.Now().UTC()
-	account, err := store.CreateAccount(ctx, sqlite.Account{EmbyUserID: "u1", Username: "due", Status: "active", ExpiresAt: now.Add(-time.Minute), CreatedAt: now, UpdatedAt: now})
+	account, err := store.CreateAccount(ctx, domain.Account{EmbyUserID: "u1", Username: "due", Status: "active", ExpiresAt: now.Add(-time.Minute), CreatedAt: now, UpdatedAt: now})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +83,7 @@ func TestExpireDueDoesNotDisableAnAccountRenewedAfterItsScan(t *testing.T) {
 	defer store.Close()
 
 	now := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
-	account, err := store.CreateAccount(ctx, sqlite.Account{EmbyUserID: "u1", Username: "due", Status: "active", ExpiresAt: now.Add(-time.Minute), CreatedAt: now, UpdatedAt: now})
+	account, err := store.CreateAccount(ctx, domain.Account{EmbyUserID: "u1", Username: "due", Status: "active", ExpiresAt: now.Add(-time.Minute), CreatedAt: now, UpdatedAt: now})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,10 +91,10 @@ func TestExpireDueDoesNotDisableAnAccountRenewedAfterItsScan(t *testing.T) {
 	if err != nil || len(due) != 1 {
 		t.Fatalf("due accounts = %#v, err = %v", due, err)
 	}
-	if _, err := store.CreateInvite(ctx, sqlite.InviteCode{CodeHash: "renew", CodePrefix: "renew", DurationDays: 1, DurationMinutes: 60, MaxUses: 1, Enabled: true, CreatedAt: now}); err != nil {
+	if _, err := store.CreateInvite(ctx, domain.InviteCode{CodeHash: "renew", CodePrefix: "renew", DurationDays: 1, DurationMinutes: 60, MaxUses: 1, Enabled: true, CreatedAt: now}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.RedeemRenewal(ctx, sqlite.RedeemRenewalInput{CodeHash: "renew", Username: account.Username, RedeemedAt: now}); err != nil {
+	if _, err := store.RedeemRenewal(ctx, domain.RedeemRenewalInput{CodeHash: "renew", Username: account.Username, RedeemedAt: now}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -124,7 +125,7 @@ func TestRunOnceDisablesDueActiveAccount(t *testing.T) {
 	}
 	defer store.Close()
 	now := time.Now().UTC()
-	account, err := store.CreateAccount(context.Background(), sqlite.Account{EmbyUserID: "u1", Username: "due", Status: "active", ExpiresAt: now.Add(-time.Minute), CreatedAt: now, UpdatedAt: now})
+	account, err := store.CreateAccount(context.Background(), domain.Account{EmbyUserID: "u1", Username: "due", Status: "active", ExpiresAt: now.Add(-time.Minute), CreatedAt: now, UpdatedAt: now})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/Rst307/emby-service-portal/internal/domain"
 )
 
 func TestAccountMutationsRequireCurrentVersion(t *testing.T) {
@@ -16,7 +18,7 @@ func TestAccountMutationsRequireCurrentVersion(t *testing.T) {
 	defer store.Close()
 
 	now := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
-	account, err := store.CreateAccount(ctx, Account{
+	account, err := store.CreateAccount(ctx, domain.Account{
 		EmbyUserID: "emby-alice", Username: "alice", Status: "active",
 		ExpiresAt: now.Add(-time.Minute), CreatedAt: now, UpdatedAt: now,
 	})
@@ -37,7 +39,7 @@ func TestAccountMutationsRequireCurrentVersion(t *testing.T) {
 		t.Fatalf("updated version = %d, want 2", account.Version)
 	}
 
-	if _, err := store.SetAccountStatus(ctx, staleDue, "expired", &now, now); !errors.Is(err, ErrAccountVersionConflict) {
+	if _, err := store.SetAccountStatus(ctx, staleDue, "expired", &now, now); !errors.Is(err, domain.ErrAccountVersionConflict) {
 		t.Fatalf("stale expiry error = %v, want version conflict", err)
 	}
 	current, err := store.FindAccount(ctx, account.ID)

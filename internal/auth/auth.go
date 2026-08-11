@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Rst307/emby-service-portal/internal/domain"
 	"github.com/Rst307/emby-service-portal/internal/persistence/sqlite"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -67,7 +68,7 @@ func (s *Service) Login(ctx context.Context, username, password string) (string,
 		return "", err
 	}
 	now := s.clock.Now().UTC()
-	session := sqlite.Session{ID: tokenID(token), AdminID: admin.ID, TokenHash: hashToken(token), CreatedAt: now, LastSeenAt: now, ExpiresAt: now.Add(s.ttl)}
+	session := domain.Session{ID: tokenID(token), AdminID: admin.ID, TokenHash: hashToken(token), CreatedAt: now, LastSeenAt: now, ExpiresAt: now.Add(s.ttl)}
 	if err := s.store.CreateSession(ctx, session); err != nil {
 		return "", fmt.Errorf("create administrator session: %w", err)
 	}

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Rst307/emby-service-portal/internal/credentials"
+	"github.com/Rst307/emby-service-portal/internal/domain"
 	"github.com/Rst307/emby-service-portal/internal/emby"
 	"github.com/Rst307/emby-service-portal/internal/persistence/sqlite"
 )
@@ -58,7 +59,7 @@ func TestDisableQueuesAccessSyncBeforeContactingEmby(t *testing.T) {
 	}
 	defer store.Close()
 	now := time.Now().UTC()
-	account, err := store.CreateAccount(ctx, sqlite.Account{EmbyUserID: "u1", Username: "alice", Status: "active", ExpiresAt: now.Add(time.Hour), CreatedAt: now, UpdatedAt: now})
+	account, err := store.CreateAccount(ctx, domain.Account{EmbyUserID: "u1", Username: "alice", Status: "active", ExpiresAt: now.Add(time.Hour), CreatedAt: now, UpdatedAt: now})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +137,7 @@ func TestUpdateToPastExpiresAccountAndQueuesPolicyInOneVersion(t *testing.T) {
 	}
 	defer store.Close()
 	now := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
-	account, err := store.CreateAccount(ctx, sqlite.Account{EmbyUserID: "u1", Username: "alice", Status: "active", ExpiresAt: now.Add(time.Hour), CreatedAt: now, UpdatedAt: now})
+	account, err := store.CreateAccount(ctx, domain.Account{EmbyUserID: "u1", Username: "alice", Status: "active", ExpiresAt: now.Add(time.Hour), CreatedAt: now, UpdatedAt: now})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,7 +168,7 @@ func TestBatchRelativeExpiryDoesNotOverwriteConcurrentUpdate(t *testing.T) {
 	}
 	defer store.Close()
 	base := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
-	account, err := store.CreateAccount(ctx, sqlite.Account{EmbyUserID: "u1", Username: "alice", Status: "active", ExpiresAt: base.Add(24 * time.Hour), CreatedAt: base, UpdatedAt: base})
+	account, err := store.CreateAccount(ctx, domain.Account{EmbyUserID: "u1", Username: "alice", Status: "active", ExpiresAt: base.Add(24 * time.Hour), CreatedAt: base, UpdatedAt: base})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,11 +208,11 @@ func TestDeleteRemovesLocalAccountWhenEmbyUserWasAlreadyDeleted(t *testing.T) {
 	}
 	defer store.Close()
 	now := time.Now().UTC()
-	account, err := store.CreateAccount(ctx, sqlite.Account{EmbyUserID: "gone", Username: "gone", Status: "active", ExpiresAt: now.Add(time.Hour), CreatedAt: now, UpdatedAt: now})
+	account, err := store.CreateAccount(ctx, domain.Account{EmbyUserID: "gone", Username: "gone", Status: "active", ExpiresAt: now.Add(time.Hour), CreatedAt: now, UpdatedAt: now})
 	if err != nil {
 		t.Fatal(err)
 	}
-	invite, err := store.CreateInvite(ctx, sqlite.InviteCode{CodeHash: "hash", Code: "code", CodePrefix: "code", DurationDays: 1, DurationMinutes: 1440, MaxUses: 1, Enabled: true, CreatedAt: now})
+	invite, err := store.CreateInvite(ctx, domain.InviteCode{CodeHash: "hash", Code: "code", CodePrefix: "code", DurationDays: 1, DurationMinutes: 1440, MaxUses: 1, Enabled: true, CreatedAt: now})
 	if err != nil {
 		t.Fatal(err)
 	}
