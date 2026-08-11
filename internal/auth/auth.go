@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/emby-user-manager/emby-user-manager/internal/persistence/sqlite"
+	"github.com/Rst307/emby-service-portal/internal/persistence/sqlite"
 	"golang.org/x/crypto/bcrypt"
 )
 

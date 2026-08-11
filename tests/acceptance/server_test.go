@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/emby-user-manager/emby-user-manager/internal/app"
-	"github.com/emby-user-manager/emby-user-manager/internal/config"
+	"github.com/Rst307/emby-service-portal/internal/app"
+	"github.com/Rst307/emby-service-portal/internal/config"
 )
 
 var csrfPattern = regexp.MustCompile(`name="csrf_token" value="([^"]+)"`)
@@ -453,7 +453,7 @@ func TestAuthenticatedPortalRenewalUsesSessionAccountWithoutCredentials(t *testi
 	if response.StatusCode != http.StatusCreated {
 		t.Fatalf("create renewal invite status = %d: %s", response.StatusCode, body(t, response))
 	}
-	inviteMatch := regexp.MustCompile(`EUM-[A-Za-z0-9_-]+`).FindString(body(t, response))
+	inviteMatch := regexp.MustCompile(`ESP-[A-Za-z0-9_-]+`).FindString(body(t, response))
 	if inviteMatch == "" {
 		t.Fatalf("created invite code missing: %s", body(t, response))
 	}

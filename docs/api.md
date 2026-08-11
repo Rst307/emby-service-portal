@@ -1,6 +1,6 @@
 # External REST API
 
-All management endpoints require `X-API-Key: <EUM_API_KEY>` and use JSON. The liveness endpoint `GET /api/v1/health` is public.
+All management endpoints require `X-API-Key: <ESP_API_KEY>` and use JSON. The liveness endpoint `GET /api/v1/health` is public.
 
 ## Accounts
 
@@ -27,7 +27,7 @@ The raw invite code is returned only by `POST /api/v1/invites`. List responses e
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/invites \
-  -H 'X-API-Key: replace-with-EUM_API_KEY' \
+  -H 'X-API-Key: replace-with-ESP_API_KEY' \
   -H 'Content-Type: application/json' \
   -d '{"duration_minutes":60,"max_uses":1}'
 ```

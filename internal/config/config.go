@@ -28,36 +28,36 @@ type Config struct {
 }
 
 func FromEnv() (Config, error) {
-	cookieSecure, err := boolEnv("EUM_COOKIE_SECURE", true)
+	cookieSecure, err := boolEnv("ESP_COOKIE_SECURE", true)
 	if err != nil {
 		return Config{}, err
 	}
-	ttl, err := durationEnv("EUM_SESSION_TTL", 24*time.Hour)
+	ttl, err := durationEnv("ESP_SESSION_TTL", 24*time.Hour)
 	if err != nil {
 		return Config{}, err
 	}
 	cfg := Config{
-		ListenAddr:            value("EUM_LISTEN_ADDR", ":8080"),
-		DatabasePath:          os.Getenv("EUM_DATABASE_PATH"),
-		EmbyBaseURL:           os.Getenv("EUM_EMBY_BASE_URL"),
-		EmbyAPIKey:            os.Getenv("EUM_EMBY_API_KEY"),
-		APIKey:                os.Getenv("EUM_API_KEY"),
-		CredentialMasterKey:   os.Getenv("EUM_CREDENTIAL_MASTER_KEY"),
-		CredentialPreviousKey: os.Getenv("EUM_CREDENTIAL_PREVIOUS_MASTER_KEY"),
-		AdminUsername:         os.Getenv("EUM_ADMIN_USERNAME"),
-		AdminPassword:         os.Getenv("EUM_ADMIN_PASSWORD"),
+		ListenAddr:            value("ESP_LISTEN_ADDR", ":8080"),
+		DatabasePath:          os.Getenv("ESP_DATABASE_PATH"),
+		EmbyBaseURL:           os.Getenv("ESP_EMBY_BASE_URL"),
+		EmbyAPIKey:            os.Getenv("ESP_EMBY_API_KEY"),
+		APIKey:                os.Getenv("ESP_API_KEY"),
+		CredentialMasterKey:   os.Getenv("ESP_CREDENTIAL_MASTER_KEY"),
+		CredentialPreviousKey: os.Getenv("ESP_CREDENTIAL_PREVIOUS_MASTER_KEY"),
+		AdminUsername:         os.Getenv("ESP_ADMIN_USERNAME"),
+		AdminPassword:         os.Getenv("ESP_ADMIN_PASSWORD"),
 		CookieSecure:          cookieSecure,
 		SessionTTL:            ttl,
-		TimeZone:              value("EUM_TIME_ZONE", "Asia/Shanghai"),
+		TimeZone:              value("ESP_TIME_ZONE", "Asia/Shanghai"),
 	}
 	return cfg, cfg.Validate()
 }
 
 func (c Config) Validate() error {
 	for name, v := range map[string]string{
-		"EUM_DATABASE_PATH": c.DatabasePath, "EUM_EMBY_BASE_URL": c.EmbyBaseURL,
-		"EUM_EMBY_API_KEY": c.EmbyAPIKey, "EUM_API_KEY": c.APIKey, "EUM_CREDENTIAL_MASTER_KEY": c.CredentialMasterKey,
-		"EUM_ADMIN_USERNAME": c.AdminUsername, "EUM_ADMIN_PASSWORD": c.AdminPassword,
+		"ESP_DATABASE_PATH": c.DatabasePath, "ESP_EMBY_BASE_URL": c.EmbyBaseURL,
+		"ESP_EMBY_API_KEY": c.EmbyAPIKey, "ESP_API_KEY": c.APIKey, "ESP_CREDENTIAL_MASTER_KEY": c.CredentialMasterKey,
+		"ESP_ADMIN_USERNAME": c.AdminUsername, "ESP_ADMIN_PASSWORD": c.AdminPassword,
 	} {
 		if strings.TrimSpace(v) == "" {
 			return fmt.Errorf("%s is required", name)
@@ -65,16 +65,16 @@ func (c Config) Validate() error {
 	}
 	u, err := url.Parse(c.EmbyBaseURL)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return fmt.Errorf("EUM_EMBY_BASE_URL must be an absolute HTTP(S) URL")
+		return fmt.Errorf("ESP_EMBY_BASE_URL must be an absolute HTTP(S) URL")
 	}
 	if u.Scheme == "http" && !isLocalHost(u.Hostname()) {
-		return fmt.Errorf("EUM_EMBY_BASE_URL must use HTTPS outside localhost")
+		return fmt.Errorf("ESP_EMBY_BASE_URL must use HTTPS outside localhost")
 	}
 	if len(c.CredentialMasterKey) < 32 {
-		return fmt.Errorf("EUM_CREDENTIAL_MASTER_KEY must be at least 32 characters")
+		return fmt.Errorf("ESP_CREDENTIAL_MASTER_KEY must be at least 32 characters")
 	}
 	if c.SessionTTL <= 0 {
-		return fmt.Errorf("EUM_SESSION_TTL must be positive")
+		return fmt.Errorf("ESP_SESSION_TTL must be positive")
 	}
 	if _, err := c.TimeLocation(); err != nil {
 		return err
@@ -91,7 +91,7 @@ func (c Config) TimeLocation() (*time.Location, error) {
 	}
 	location, err := time.LoadLocation(name)
 	if err != nil {
-		return nil, fmt.Errorf("EUM_TIME_ZONE must be a valid IANA time zone: %w", err)
+		return nil, fmt.Errorf("ESP_TIME_ZONE must be a valid IANA time zone: %w", err)
 	}
 	return location, nil
 }

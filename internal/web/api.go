@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/emby-user-manager/emby-user-manager/internal/accounts"
-	"github.com/emby-user-manager/emby-user-manager/internal/invites"
-	"github.com/emby-user-manager/emby-user-manager/internal/persistence/sqlite"
+	"github.com/Rst307/emby-service-portal/internal/accounts"
+	"github.com/Rst307/emby-service-portal/internal/invites"
+	"github.com/Rst307/emby-service-portal/internal/persistence/sqlite"
 )
 
 func (s *Server) apiAuthorized(r *http.Request) bool {

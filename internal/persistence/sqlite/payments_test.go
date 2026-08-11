@@ -20,16 +20,16 @@ func TestFulfillActivationPaymentIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	order, err := store.CreatePaymentOrder(ctx, CreatePaymentOrderInput{PublicToken: "public-token", MerchantOrderNo: "EUM-ORDER-1", Kind: "activation", PlanID: plan.ID, PlanName: plan.Name, DurationDays: 30, DurationMinutes: 30 * 24 * 60, AmountFen: 990, Currency: "CNY", ExpiresAt: now.Add(15 * time.Minute), Now: now})
+	order, err := store.CreatePaymentOrder(ctx, CreatePaymentOrderInput{PublicToken: "public-token", MerchantOrderNo: "ESP-ORDER-1", Kind: "activation", PlanID: plan.ID, PlanName: plan.Name, DurationDays: 30, DurationMinutes: 30 * 24 * 60, AmountFen: 990, Currency: "CNY", ExpiresAt: now.Add(15 * time.Minute), Now: now})
 	if err != nil {
 		t.Fatal(err)
 	}
-	input := FulfillPaymentOrderInput{OrderID: order.ID, EventID: "evt-1", EventType: "order.paid", AmountFen: 990, Currency: "CNY", ProviderPaymentKey: "wechat-1", PayloadHash: "hash", PaidAt: now.Add(time.Minute), Now: now.Add(time.Minute), ActivationCode: "EUM-ACT-test-code", ActivationCodeHash: "code-hash", ActivationCodePrefix: "EUM-ACT-"}
+	input := FulfillPaymentOrderInput{OrderID: order.ID, EventID: "evt-1", EventType: "order.paid", AmountFen: 990, Currency: "CNY", ProviderPaymentKey: "wechat-1", PayloadHash: "hash", PaidAt: now.Add(time.Minute), Now: now.Add(time.Minute), ActivationCode: "ESP-ACT-test-code", ActivationCodeHash: "code-hash", ActivationCodePrefix: "ESP-ACT-"}
 	fulfilled, err := store.FulfillPaymentOrder(ctx, input)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fulfilled.FulfillmentStatus != "completed" || fulfilled.ActivationCode != "EUM-ACT-test-code" || fulfilled.InviteID == nil {
+	if fulfilled.FulfillmentStatus != "completed" || fulfilled.ActivationCode != "ESP-ACT-test-code" || fulfilled.InviteID == nil {
 		t.Fatalf("fulfilled = %+v", fulfilled)
 	}
 	second, err := store.FulfillPaymentOrder(ctx, input)
@@ -74,7 +74,7 @@ func TestDeletePaymentPlanProtectsReferencedOrders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.CreatePaymentOrder(ctx, CreatePaymentOrderInput{PublicToken: "delete-test-token", MerchantOrderNo: "EUM-DELETE-TEST", Kind: "activation", PlanID: used.ID, PlanName: used.Name, DurationDays: used.DurationDays, DurationMinutes: used.DurationMinutes, AmountFen: used.PriceFen, Currency: "CNY", ExpiresAt: now.Add(time.Hour), Now: now}); err != nil {
+	if _, err := store.CreatePaymentOrder(ctx, CreatePaymentOrderInput{PublicToken: "delete-test-token", MerchantOrderNo: "ESP-DELETE-TEST", Kind: "activation", PlanID: used.ID, PlanName: used.Name, DurationDays: used.DurationDays, DurationMinutes: used.DurationMinutes, AmountFen: used.PriceFen, Currency: "CNY", ExpiresAt: now.Add(time.Hour), Now: now}); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.DeletePaymentPlan(ctx, used.ID); !errors.Is(err, ErrPaymentPlanInUse) {
@@ -94,14 +94,14 @@ func TestListPaymentOrdersSearchesBuyerAndSummarizes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, err := store.CreatePaymentOrder(ctx, CreatePaymentOrderInput{PublicToken: "buyer-token-1", MerchantOrderNo: "EUM-BUYER-1", Kind: "activation", PlanID: plan.ID, PlanName: plan.Name, BuyerInfo: "张三 / wx-z3", DurationDays: 30, DurationMinutes: 30 * 24 * 60, AmountFen: 990, Currency: "CNY", ExpiresAt: now.Add(time.Hour), Now: now})
+	first, err := store.CreatePaymentOrder(ctx, CreatePaymentOrderInput{PublicToken: "buyer-token-1", MerchantOrderNo: "ESP-BUYER-1", Kind: "activation", PlanID: plan.ID, PlanName: plan.Name, BuyerInfo: "张三 / wx-z3", DurationDays: 30, DurationMinutes: 30 * 24 * 60, AmountFen: 990, Currency: "CNY", ExpiresAt: now.Add(time.Hour), Now: now})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := store.SetPaymentOrderState(ctx, first.ID, "paid", "PAID", "", now); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.CreatePaymentOrder(ctx, CreatePaymentOrderInput{PublicToken: "buyer-token-2", MerchantOrderNo: "EUM-BUYER-2", Kind: "activation", PlanID: plan.ID, PlanName: plan.Name, BuyerInfo: "李四", DurationDays: 30, DurationMinutes: 30 * 24 * 60, AmountFen: 990, Currency: "CNY", ExpiresAt: now.Add(time.Hour), Now: now}); err != nil {
+	if _, err := store.CreatePaymentOrder(ctx, CreatePaymentOrderInput{PublicToken: "buyer-token-2", MerchantOrderNo: "ESP-BUYER-2", Kind: "activation", PlanID: plan.ID, PlanName: plan.Name, BuyerInfo: "李四", DurationDays: 30, DurationMinutes: 30 * 24 * 60, AmountFen: 990, Currency: "CNY", ExpiresAt: now.Add(time.Hour), Now: now}); err != nil {
 		t.Fatal(err)
 	}
 	page, err := store.ListPaymentOrders(ctx, PaymentOrderFilter{Query: "张三", Page: 1, PageSize: 20})
@@ -129,7 +129,7 @@ func TestFulfillRenewalPaymentExtendsExpiredAccountAndQueuesAccess(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	order, err := store.CreatePaymentOrder(ctx, CreatePaymentOrderInput{PublicToken: "renewal-token", MerchantOrderNo: "EUM-ORDER-2", Kind: "renewal", PlanID: plan.ID, PlanName: plan.Name, AccountID: &account.ID, AccountUsername: account.Username, DurationDays: 30, DurationMinutes: 30 * 24 * 60, AmountFen: 990, Currency: "CNY", ExpiresAt: now.Add(15 * time.Minute), Now: now})
+	order, err := store.CreatePaymentOrder(ctx, CreatePaymentOrderInput{PublicToken: "renewal-token", MerchantOrderNo: "ESP-ORDER-2", Kind: "renewal", PlanID: plan.ID, PlanName: plan.Name, AccountID: &account.ID, AccountUsername: account.Username, DurationDays: 30, DurationMinutes: 30 * 24 * 60, AmountFen: 990, Currency: "CNY", ExpiresAt: now.Add(15 * time.Minute), Now: now})
 	if err != nil {
 		t.Fatal(err)
 	}

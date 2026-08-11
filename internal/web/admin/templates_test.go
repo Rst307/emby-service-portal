@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/emby-user-manager/emby-user-manager/internal/persistence/sqlite"
+	"github.com/Rst307/emby-service-portal/internal/persistence/sqlite"
 )
 
 func TestRenderDashboardShowsAccountStats(t *testing.T) {
@@ -54,12 +54,12 @@ func TestRenderInvitesShowsCreatedCodeAndHumanizedDuration(t *testing.T) {
 		t.Fatal(err)
 	}
 	response := httptest.NewRecorder()
-	templates.Render(response, "invites", ViewData{NewInviteCode: "EUM-test-code-123", Invites: []sqlite.InviteCode{
-		{ID: 1, CodePrefix: "EUM-TEST", Code: "EUM-test-code-123", DurationMinutes: 30 * 24 * 60, MaxUses: 1, UsedCount: 1, Enabled: true, Redemptions: []sqlite.InviteRedemption{{AccountUsername: "alice", Kind: "register", RedeemedAt: time.Date(2030, 1, 2, 3, 4, 0, 0, time.UTC)}}},
-		{ID: 2, CodePrefix: "EUM-OLD", DurationMinutes: 45, MaxUses: 0, Enabled: false},
+	templates.Render(response, "invites", ViewData{NewInviteCode: "ESP-test-code-123", Invites: []sqlite.InviteCode{
+		{ID: 1, CodePrefix: "ESP-TEST", Code: "ESP-test-code-123", DurationMinutes: 30 * 24 * 60, MaxUses: 1, UsedCount: 1, Enabled: true, Redemptions: []sqlite.InviteRedemption{{AccountUsername: "alice", Kind: "register", RedeemedAt: time.Date(2030, 1, 2, 3, 4, 0, 0, time.UTC)}}},
+		{ID: 2, CodePrefix: "ESP-OLD", DurationMinutes: 45, MaxUses: 0, Enabled: false},
 	}})
 	page := response.Body.String()
-	for _, marker := range []string{"邀请码已创建", "EUM-test-code-123", "30 天", "45 分钟", "alice", "注册使用", "2030-01-02 03:04", "data-confirm=\"确认删除此邀请码？\""} {
+	for _, marker := range []string{"邀请码已创建", "ESP-test-code-123", "30 天", "45 分钟", "alice", "注册使用", "2030-01-02 03:04", "data-confirm=\"确认删除此邀请码？\""} {
 		if !strings.Contains(page, marker) {
 			t.Fatalf("invites page missing %q: %s", marker, page)
 		}
@@ -172,10 +172,10 @@ func TestRenderOrdersShowsBuyerAndSearchControls(t *testing.T) {
 	}
 	response := httptest.NewRecorder()
 	templates.Render(response, "orders", ViewData{
-		CSRFToken: "csrf", PaymentOrders: []sqlite.PaymentOrder{{ID: 7, MerchantOrderNo: "EUM-ORDER-7", PublicToken: "token-7", Kind: "activation", PlanName: "月卡", DurationMinutes: 30 * 24 * 60, BuyerInfo: "张三 / wx-z3", AmountFen: 990, Currency: "CNY", PaymentStatus: "paid", FulfillmentStatus: "completed", CreatedAt: time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)}}, OrderTotal: 1, OrderPaidCount: 1, OrderPaidFen: 990, OrderPage: 1, OrderPageSize: 20,
+		CSRFToken: "csrf", PaymentOrders: []sqlite.PaymentOrder{{ID: 7, MerchantOrderNo: "ESP-ORDER-7", PublicToken: "token-7", Kind: "activation", PlanName: "月卡", DurationMinutes: 30 * 24 * 60, BuyerInfo: "张三 / wx-z3", AmountFen: 990, Currency: "CNY", PaymentStatus: "paid", FulfillmentStatus: "completed", CreatedAt: time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)}}, OrderTotal: 1, OrderPaidCount: 1, OrderPaidFen: 990, OrderPage: 1, OrderPageSize: 20,
 	})
 	page := response.Body.String()
-	for _, marker := range []string{"支付订单", "订单号、商品、购买人", "张三 / wx-z3", "EUM-ORDER-7", "已付款", "查询订单", "商品类型", "/payment/token-7"} {
+	for _, marker := range []string{"支付订单", "订单号、商品、购买人", "张三 / wx-z3", "ESP-ORDER-7", "已付款", "查询订单", "商品类型", "/payment/token-7"} {
 		if !strings.Contains(page, marker) {
 			t.Fatalf("orders page missing %q: %s", marker, page)
 		}
@@ -189,11 +189,11 @@ func TestRenderPaymentShowsCheckoutAndActivationCode(t *testing.T) {
 	}
 	response := httptest.NewRecorder()
 	templates.Render(response, "payment", ViewData{PaymentOrder: sqlite.PaymentOrder{
-		PublicToken: "token", MerchantOrderNo: "EUM-ORDER-1", Kind: "activation", PlanName: "月卡", AmountFen: 990,
-		PaymentStatus: "paid", FulfillmentStatus: "completed", PaymentURL: "https://pay.example/checkout", ActivationCode: "EUM-ACT-test",
+		PublicToken: "token", MerchantOrderNo: "ESP-ORDER-1", Kind: "activation", PlanName: "月卡", AmountFen: 990,
+		PaymentStatus: "paid", FulfillmentStatus: "completed", PaymentURL: "https://pay.example/checkout", ActivationCode: "ESP-ACT-test",
 	}})
 	page := response.Body.String()
-	for _, marker := range []string{"微信支付", "¥9.90", "打开微信收银台", "EUM-ACT-test", "data-payment-page", "data-payment-token=\"token\""} {
+	for _, marker := range []string{"微信支付", "¥9.90", "打开微信收银台", "ESP-ACT-test", "data-payment-page", "data-payment-token=\"token\""} {
 		if !strings.Contains(page, marker) {
 			t.Fatalf("payment page missing %q: %s", marker, page)
 		}

@@ -141,7 +141,7 @@ func (c *HTTPClient) AuthenticateUser(ctx context.Context, username, password st
 		return User{}, err
 	}
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("X-Emby-Authorization", `Emby Client="Emby User Manager", Device="Web", DeviceId="emby-user-manager", Version="1.0.0"`)
+	request.Header.Set("X-Emby-Authorization", `Emby Client="Emby Service Portal", Device="Web", DeviceId="emby-service-portal", Version="1.0.0"`)
 	response, err := c.httpClient.Do(request)
 	if err != nil {
 		return User{}, fmt.Errorf("send Emby authentication request: %w", err)

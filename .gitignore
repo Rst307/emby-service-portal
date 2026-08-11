@@ -9,4 +9,4 @@ bin/
 dist/
 *.log
 *.pid
-emby-user-manager.exe
+emby-service-portal.exe

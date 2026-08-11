@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/emby-user-manager/emby-user-manager/internal/credentials"
-	"github.com/emby-user-manager/emby-user-manager/internal/paymentcenter"
-	"github.com/emby-user-manager/emby-user-manager/internal/persistence/sqlite"
+	"github.com/Rst307/emby-service-portal/internal/credentials"
+	"github.com/Rst307/emby-service-portal/internal/paymentcenter"
+	"github.com/Rst307/emby-service-portal/internal/persistence/sqlite"
 )
 
 func TestActivationOrderIsFulfilledFromVerifiedPaymentCenterCallback(t *testing.T) {
@@ -38,7 +38,7 @@ func TestActivationOrderIsFulfilledFromVerifiedPaymentCenterCallback(t *testing.
 		if request.Note != "购买人：张三 / wx-z3" {
 			t.Fatalf("provider note = %q", request.Note)
 		}
-		if !strings.HasPrefix(request.ReturnURL, "https://user.example/payment/") || !strings.Contains(request.ReturnURL, "order=EUM-") || strings.Contains(request.ReturnURL, "{") {
+		if !strings.HasPrefix(request.ReturnURL, "https://user.example/payment/") || !strings.Contains(request.ReturnURL, "order=ESP-") || strings.Contains(request.ReturnURL, "{") {
 			t.Fatalf("return_url = %q", request.ReturnURL)
 		}
 		if got := signForTest(secret, r.Method, r.URL.Path, r.Header.Get("X-Pay-Timestamp"), r.Header.Get("X-Pay-Nonce"), body); got != r.Header.Get("X-Pay-Signature") {
@@ -87,7 +87,7 @@ func TestActivationOrderIsFulfilledFromVerifiedPaymentCenterCallback(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fulfilled.FulfillmentStatus != "completed" || !strings.HasPrefix(fulfilled.ActivationCode, "EUM-ACT-") {
+	if fulfilled.FulfillmentStatus != "completed" || !strings.HasPrefix(fulfilled.ActivationCode, "ESP-ACT-") {
 		t.Fatalf("fulfilled = %+v", fulfilled)
 	}
 	if err := service.HandleWebhook(ctx, headers, body); err != nil {

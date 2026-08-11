@@ -59,17 +59,17 @@ jobs:
         run: |
           mkdir -p dist
           go build -trimpath -buildvcs=false -ldflags='-s -w' \
-            -o dist/emby-user-manager-linux-amd64 ./cmd/emby-user-manager
-          chmod 0755 dist/emby-user-manager-linux-amd64
-          sha256sum dist/emby-user-manager-linux-amd64 \
-            > dist/emby-user-manager-linux-amd64.sha256
+            -o dist/emby-service-portal-linux-amd64 ./cmd/emby-service-portal
+          chmod 0755 dist/emby-service-portal-linux-amd64
+          sha256sum dist/emby-service-portal-linux-amd64 \
+            > dist/emby-service-portal-linux-amd64.sha256
       - name: Upload Linux executable
         uses: actions/upload-artifact@v7
         with:
-          name: emby-user-manager-linux-amd64
+          name: emby-service-portal-linux-amd64
           path: |
-            dist/emby-user-manager-linux-amd64
-            dist/emby-user-manager-linux-amd64.sha256
+            dist/emby-service-portal-linux-amd64
+            dist/emby-service-portal-linux-amd64.sha256
           if-no-files-found: error
           retention-days: 30
 
@@ -84,7 +84,7 @@ jobs:
       - name: Download Linux executable
         uses: actions/download-artifact@v8
         with:
-          name: emby-user-manager-linux-amd64
+          name: emby-service-portal-linux-amd64
           path: dist
       - name: Publish GitHub Release
         env:
@@ -92,10 +92,10 @@ jobs:
           RELEASE_TAG: v0.0.0-build.${{ github.run_id }}
         run: |
           gh release create "$RELEASE_TAG" \
-            dist/emby-user-manager-linux-amd64 \
-            dist/emby-user-manager-linux-amd64.sha256 \
+            dist/emby-service-portal-linux-amd64 \
+            dist/emby-service-portal-linux-amd64.sha256 \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "Emby User Manager $RELEASE_TAG" \
+            --title "Emby Service Portal $RELEASE_TAG" \
             --prerelease \
             --generate-notes

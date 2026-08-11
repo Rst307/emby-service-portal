@@ -1,4 +1,4 @@
-module github.com/emby-user-manager/emby-user-manager
+module github.com/Rst307/emby-service-portal
 
 go 1.26.5
 

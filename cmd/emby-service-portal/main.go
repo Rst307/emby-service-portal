@@ -10,8 +10,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/emby-user-manager/emby-user-manager/internal/app"
-	"github.com/emby-user-manager/emby-user-manager/internal/config"
+	"github.com/Rst307/emby-service-portal/internal/app"
+	"github.com/Rst307/emby-service-portal/internal/config"
 )
 
 func main() {

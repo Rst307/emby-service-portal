@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/emby-user-manager/emby-user-manager/internal/accounts"
-	"github.com/emby-user-manager/emby-user-manager/internal/credentials"
-	"github.com/emby-user-manager/emby-user-manager/internal/emby"
-	"github.com/emby-user-manager/emby-user-manager/internal/persistence/sqlite"
+	"github.com/Rst307/emby-service-portal/internal/accounts"
+	"github.com/Rst307/emby-service-portal/internal/credentials"
+	"github.com/Rst307/emby-service-portal/internal/emby"
+	"github.com/Rst307/emby-service-portal/internal/persistence/sqlite"
 )
 
 type registrationSagaEmby struct{ createCalls int }

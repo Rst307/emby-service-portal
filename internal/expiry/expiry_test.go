@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/emby-user-manager/emby-user-manager/internal/emby"
-	"github.com/emby-user-manager/emby-user-manager/internal/persistence/sqlite"
+	"github.com/Rst307/emby-service-portal/internal/emby"
+	"github.com/Rst307/emby-service-portal/internal/persistence/sqlite"
 )
 
 type fakeEmby struct {

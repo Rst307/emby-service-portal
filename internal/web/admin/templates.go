@@ -10,8 +10,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/emby-user-manager/emby-user-manager/internal/payments"
-	"github.com/emby-user-manager/emby-user-manager/internal/persistence/sqlite"
+	"github.com/Rst307/emby-service-portal/internal/payments"
+	"github.com/Rst307/emby-service-portal/internal/persistence/sqlite"
 )
 
 //go:embed templates/*.html

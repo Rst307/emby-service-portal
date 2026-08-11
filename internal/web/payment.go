@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/emby-user-manager/emby-user-manager/internal/paymentcenter"
-	"github.com/emby-user-manager/emby-user-manager/internal/payments"
-	"github.com/emby-user-manager/emby-user-manager/internal/web/admin"
+	"github.com/Rst307/emby-service-portal/internal/paymentcenter"
+	"github.com/Rst307/emby-service-portal/internal/payments"
+	"github.com/Rst307/emby-service-portal/internal/web/admin"
 )
 
 func (s *Server) purchasePage(w http.ResponseWriter, r *http.Request) {

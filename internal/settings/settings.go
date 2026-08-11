@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/emby-user-manager/emby-user-manager/internal/persistence/sqlite"
+	"github.com/Rst307/emby-service-portal/internal/persistence/sqlite"
 )
 
 // DisplayTimeZoneKey is the settings key holding the display time zone.

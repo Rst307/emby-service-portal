@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Installs or updates a least-privilege systemd service. Run as root after
-# placing the binary and .env in /opt/embyUserManager.
+# placing the binary and .env in /opt/emby-service-portal.
 set -euo pipefail
 
-APP_DIR="/opt/embyUserManager"
-BINARY="$APP_DIR/emby-user-manager-linux-amd64"
+APP_DIR="/opt/emby-service-portal"
+BINARY="$APP_DIR/emby-service-portal-linux-amd64"
 ENV_FILE="$APP_DIR/.env"
 DATA_DIR="$APP_DIR/data"
-SERVICE_FILE="/etc/systemd/system/emby-user-manager.service"
-SERVICE_USER="emby-user-manager"
+SERVICE_FILE="/etc/systemd/system/emby-service-portal.service"
+SERVICE_USER="emby-service-portal"
 
 if [[ $EUID -ne 0 ]]; then
   echo "Please run as root: sudo bash $0" >&2
@@ -33,7 +33,7 @@ chmod 0600 "$ENV_FILE"
 
 cat >"$SERVICE_FILE" <<EOF
 [Unit]
-Description=Emby User Manager
+Description=Emby Service Portal
 After=network-online.target
 Wants=network-online.target
 
@@ -67,7 +67,7 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable emby-user-manager
-systemctl restart emby-user-manager
+systemctl enable emby-service-portal
+systemctl restart emby-service-portal
 sleep 1
-systemctl --no-pager --full status emby-user-manager
+systemctl --no-pager --full status emby-service-portal

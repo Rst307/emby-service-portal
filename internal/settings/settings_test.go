@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/emby-user-manager/emby-user-manager/internal/persistence/sqlite"
+	"github.com/Rst307/emby-service-portal/internal/persistence/sqlite"
 )
 
 func openStore(t *testing.T) *sqlite.Store {

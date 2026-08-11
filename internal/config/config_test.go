@@ -45,7 +45,7 @@ func TestValidateAcceptsIanaTimeZone(t *testing.T) {
 func TestValidateRejectsInvalidTimeZone(t *testing.T) {
 	cfg := validConfig()
 	cfg.TimeZone = "not/a-time-zone"
-	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "EUM_TIME_ZONE") {
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "ESP_TIME_ZONE") {
 		t.Fatalf("Validate() error = %v, want time-zone error", err)
 	}
 }
@@ -53,7 +53,7 @@ func TestValidateRejectsInvalidTimeZone(t *testing.T) {
 func TestValidateRequiresSeparateCredentialMasterKey(t *testing.T) {
 	cfg := validConfig()
 	cfg.CredentialMasterKey = ""
-	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "EUM_CREDENTIAL_MASTER_KEY") {
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "ESP_CREDENTIAL_MASTER_KEY") {
 		t.Fatalf("Validate() error = %v, want master key error", err)
 	}
 }

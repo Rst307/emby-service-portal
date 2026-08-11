@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/emby-user-manager/emby-user-manager/internal/accounts"
-	"github.com/emby-user-manager/emby-user-manager/internal/persistence/sqlite"
+	"github.com/Rst307/emby-service-portal/internal/accounts"
+	"github.com/Rst307/emby-service-portal/internal/persistence/sqlite"
 )
 
 var (
@@ -155,12 +155,12 @@ func (s *Service) consume(ctx context.Context, code string, now time.Time) (sqli
 	}
 	return invite, nil
 }
-func newCode() (string, error) { return NewCode("EUM-") }
+func newCode() (string, error) { return NewCode("ESP-") }
 
 // NewActivationCode creates a paid activation code without persisting it. The
 // payment fulfillment transaction owns persistence, so a retry cannot create a
 // second code after a partially completed callback.
-func NewActivationCode() (string, error) { return NewCode("EUM-ACT-") }
+func NewActivationCode() (string, error) { return NewCode("ESP-ACT-") }
 
 // NewCode creates a random redeemable code with the supplied prefix.
 func NewCode(prefix string) (string, error) {

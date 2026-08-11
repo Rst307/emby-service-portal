@@ -20,7 +20,7 @@ func TestListInvitesIncludesTheBusinessAccountThatUsedTheCode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	invite, err := store.CreateInvite(ctx, InviteCode{CodeHash: "invite-hash", Code: "EUM-ACT-test", CodePrefix: "EUM-ACT", DurationDays: 1, DurationMinutes: 24 * 60, MaxUses: 1, Enabled: true, CreatedAt: now})
+	invite, err := store.CreateInvite(ctx, InviteCode{CodeHash: "invite-hash", Code: "ESP-ACT-test", CodePrefix: "ESP-ACT", DurationDays: 1, DurationMinutes: 24 * 60, MaxUses: 1, Enabled: true, CreatedAt: now})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestRedeemRenewalAtomicallyExtendsEveryConcurrentRedemption(t *testing.T) {
 		t.Fatal(err)
 	}
 	invite, err := store.CreateInvite(ctx, InviteCode{
-		CodeHash: "invite-hash", CodePrefix: "EUM-test", DurationDays: 1, DurationMinutes: 60,
+		CodeHash: "invite-hash", CodePrefix: "ESP-test", DurationDays: 1, DurationMinutes: 60,
 		MaxUses: 2, Enabled: true, CreatedAt: createdAt,
 	})
 	if err != nil {

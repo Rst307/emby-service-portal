@@ -16,14 +16,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/emby-user-manager/emby-user-manager/internal/accounts"
-	"github.com/emby-user-manager/emby-user-manager/internal/auth"
-	"github.com/emby-user-manager/emby-user-manager/internal/invites"
-	"github.com/emby-user-manager/emby-user-manager/internal/payments"
-	"github.com/emby-user-manager/emby-user-manager/internal/portal"
-	"github.com/emby-user-manager/emby-user-manager/internal/ratelimit"
-	"github.com/emby-user-manager/emby-user-manager/internal/settings"
-	"github.com/emby-user-manager/emby-user-manager/internal/web/admin"
+	"github.com/Rst307/emby-service-portal/internal/accounts"
+	"github.com/Rst307/emby-service-portal/internal/auth"
+	"github.com/Rst307/emby-service-portal/internal/invites"
+	"github.com/Rst307/emby-service-portal/internal/payments"
+	"github.com/Rst307/emby-service-portal/internal/portal"
+	"github.com/Rst307/emby-service-portal/internal/ratelimit"
+	"github.com/Rst307/emby-service-portal/internal/settings"
+	"github.com/Rst307/emby-service-portal/internal/web/admin"
 )
 
 const sessionCookie = "eum_admin_session"
@@ -133,9 +133,6 @@ func (s *Server) Handler() http.Handler {
 	return securityHeaders(s.limitBody(s.ensureCSRF(mux)))
 }
 
-func (s *Server) homePage(w http.ResponseWriter, r *http.Request) {
-	s.templates.Render(w, "home", admin.ViewData{CSRFToken: csrfFromRequest(r)})
-}
 func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	_, _ = w.Write([]byte("ok\n"))

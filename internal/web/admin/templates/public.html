@@ -8,16 +8,16 @@
   <section class="auth-card">
     <div class="brand">
       <span class="brand-mark" aria-hidden="true">E</span>
-      <span class="brand-copy"><strong>Emby 服务</strong><small>MEMBER ACCESS</small></span>
+      <span class="brand-copy"><strong>Emby Service Portal</strong><small>MEMBER ACCESS</small></span>
     </div>
     <p class="eyebrow">邀请码注册</p>
     <h1 class="page-title">创建你的账号</h1>
-    <p class="page-lead">输入有效邀请码后，即可开通 Emby 服务。</p>
+    <p class="page-lead">输入有效邀请码后，即可开通 Emby Service Portal。</p>
     {{if .Error}}<p class="alert error" role="alert">{{.Error}}</p>{{end}}
     <form method="post" action="/register">
       <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
       <label class="field">邀请码
-        <input name="code" autocomplete="off" placeholder="例如 EUM-..." required>
+        <input name="code" autocomplete="off" placeholder="例如 ESP-..." required>
       </label>
       <label class="field">用户名
         <input name="username" autocomplete="username" placeholder="设置登录用户名" required>
@@ -44,7 +44,7 @@
   <section class="auth-card">
     <div class="brand">
       <span class="brand-mark" aria-hidden="true">E</span>
-      <span class="brand-copy"><strong>Emby 服务</strong><small>MEMBER ACCESS</small></span>
+      <span class="brand-copy"><strong>Emby Service Portal</strong><small>MEMBER ACCESS</small></span>
     </div>
     <p class="eyebrow">邀请码续费</p>
     <h1 class="page-title">延长订阅时间</h1>
@@ -81,7 +81,7 @@
     <form method="post" action="/renew">
       <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
       <label class="field">邀请码
-        <input name="code" autocomplete="off" placeholder="例如 EUM-..." required>
+        <input name="code" autocomplete="off" placeholder="例如 ESP-..." required>
       </label>
       {{if .Account.ID}}
       <div class="portal-renewal-account">

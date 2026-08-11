@@ -32,6 +32,8 @@ func New(primarySecret string, fallbackSecrets ...string) *Vault {
 			continue
 		}
 		seen[secret] = struct{}{}
+		// The derivation context is a historical compatibility constant: changing
+		// it would make previously encrypted credentials undecryptable.
 		keys = append(keys, sha256.Sum256([]byte("emby-user-manager/password-vault/v1/"+secret)))
 	}
 	return &Vault{keys: keys}

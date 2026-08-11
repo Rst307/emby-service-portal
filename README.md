@@ -1,6 +1,6 @@
-# Emby User Manager
+# Emby Service Portal
 
-面向单个 Emby 服务器的轻量级用户与订阅期管理工具。它是一个单进程 Go 应用，使用 SQLite（WAL）保存业务账号、邀请码、会话和加密凭据，并提供管理后台、用户中心和 REST API。
+面向 Emby 服务器的自助服务门户与订阅管理平台。它是一个单进程 Go 应用，使用 SQLite（WAL）保存业务账号、邀请码、会话和加密凭据，提供用户自助门户（激活码购买、订阅续费、状态查询）、管理后台和 REST API。
 
 > 适用于可信管理员管理的单服务器部署；生产环境应部署在 HTTPS 反向代理之后。
 
@@ -32,8 +32,8 @@
 
 ```bash
 cp .env.example .env
-# 编辑 .env，并将 EUM_* 变量导出到当前 shell。
-go run ./cmd/emby-user-manager
+# 编辑 .env，并将 ESP_* 变量导出到当前 shell。
+go run ./cmd/emby-service-portal
 ```
 
 程序不会自动加载 `.env`，这是为了让 systemd、容器平台等生产环境成为唯一的配置来源。启动后访问：
@@ -63,18 +63,18 @@ go run ./cmd/emby-user-manager
 
 | 变量 | 必填 | 说明 |
 | --- | --- | --- |
-| `EUM_LISTEN_ADDR` | 否 | HTTP 监听地址，默认 `:8080`；生产反代时使用 `127.0.0.1:8081`。 |
-| `EUM_DATABASE_PATH` | 是 | SQLite 数据库路径。 |
-| `EUM_EMBY_BASE_URL` | 是 | Emby 基础 URL，可带 `/emby`；远程地址必须使用 HTTPS。本机开发可用 `http://127.0.0.1:8096/emby`。 |
-| `EUM_EMBY_API_KEY` | 是 | Emby 管理员 API Key。 |
-| `EUM_API_KEY` | 是 | 外部 REST API 的 `X-API-Key`。 |
-| `EUM_CREDENTIAL_MASTER_KEY` | 是 | 至少 32 字符、独立于 API Key 的凭据加密密钥。 |
-| `EUM_CREDENTIAL_PREVIOUS_MASTER_KEY` | 否 | 轮换主密钥时填入上一把主密钥。首次部署留空。 |
-| `EUM_ADMIN_USERNAME` | 是 | 首次启动时创建的管理员用户名。 |
-| `EUM_ADMIN_PASSWORD` | 是 | 首次启动时创建的管理员密码；不会覆盖已有管理员。 |
-| `EUM_COOKIE_SECURE` | 否 | HTTPS 生产环境设为 `true`；仅可信局域网的直接 HTTP 可设为 `false`。 |
-| `EUM_SESSION_TTL` | 否 | 会话有效期，默认 `24h`。 |
-| `EUM_TIME_ZONE` | 否 | 初始显示时区（首次启动写入设置，之后可在后台「设置」页随时切换），默认 `Asia/Shanghai`。所有页面展示的时间都会按此转换；数据库和 API 仍以 UTC/RFC3339 保存和返回。 |
+| `ESP_LISTEN_ADDR` | 否 | HTTP 监听地址，默认 `:8080`；生产反代时使用 `127.0.0.1:8081`。 |
+| `ESP_DATABASE_PATH` | 是 | SQLite 数据库路径。 |
+| `ESP_EMBY_BASE_URL` | 是 | Emby 基础 URL，可带 `/emby`；远程地址必须使用 HTTPS。本机开发可用 `http://127.0.0.1:8096/emby`。 |
+| `ESP_EMBY_API_KEY` | 是 | Emby 管理员 API Key。 |
+| `ESP_API_KEY` | 是 | 外部 REST API 的 `X-API-Key`。 |
+| `ESP_CREDENTIAL_MASTER_KEY` | 是 | 至少 32 字符、独立于 API Key 的凭据加密密钥。 |
+| `ESP_CREDENTIAL_PREVIOUS_MASTER_KEY` | 否 | 轮换主密钥时填入上一把主密钥。首次部署留空。 |
+| `ESP_ADMIN_USERNAME` | 是 | 首次启动时创建的管理员用户名。 |
+| `ESP_ADMIN_PASSWORD` | 是 | 首次启动时创建的管理员密码；不会覆盖已有管理员。 |
+| `ESP_COOKIE_SECURE` | 否 | HTTPS 生产环境设为 `true`；仅可信局域网的直接 HTTP 可设为 `false`。 |
+| `ESP_SESSION_TTL` | 否 | 会话有效期，默认 `24h`。 |
+| `ESP_TIME_ZONE` | 否 | 初始显示时区（首次启动写入设置，之后可在后台「设置」页随时切换），默认 `Asia/Shanghai`。所有页面展示的时间都会按此转换；数据库和 API 仍以 UTC/RFC3339 保存和返回。 |
 
 生成随机密钥：
 
@@ -84,27 +84,27 @@ openssl rand -base64 48
 
 ### 密钥升级与轮换
 
-旧版本使用 `EUM_API_KEY` 派生密码加密密钥。升级时设置新的 `EUM_CREDENTIAL_MASTER_KEY` 后，旧密文仍可通过现有 API Key 读取。**不要在确认所有旧凭据已更新前轮换 API Key。**
+旧版本使用 `ESP_API_KEY` 派生密码加密密钥。升级时设置新的 `ESP_CREDENTIAL_MASTER_KEY` 后，旧密文仍可通过现有 API Key 读取。**不要在确认所有旧凭据已更新前轮换 API Key。**
 
 轮换凭据主密钥时：
 
 ```env
-EUM_CREDENTIAL_MASTER_KEY=新的主密钥
-EUM_CREDENTIAL_PREVIOUS_MASTER_KEY=旧的主密钥
+ESP_CREDENTIAL_MASTER_KEY=新的主密钥
+ESP_CREDENTIAL_PREVIOUS_MASTER_KEY=旧的主密钥
 ```
 
 新写入会使用新主密钥；旧密文仍可读取。
 
 ## Linux / systemd 部署
 
-每次代码推送到 `main` 后，GitHub Actions 会自动生成静态 Linux amd64 可执行文件，并创建一个带构建编号的 GitHub 预发布 Release。直接在仓库的 [Releases](https://github.com/Rst307/embyUserManager/releases) 页面下载最新版本；每个 Release 同时包含可执行文件和 SHA-256 校验文件。Pull Request 只执行检查，不会发布 Release；也可以在 Actions 页面通过 **Run workflow** 手动构建并发布。
+每次代码推送到 `main` 后，GitHub Actions 会自动生成静态 Linux amd64 可执行文件，并创建一个带构建编号的 GitHub 预发布 Release。直接在仓库的 [Releases](https://github.com/Rst307/emby-service-portal/releases) 页面下载最新版本；每个 Release 同时包含可执行文件和 SHA-256 校验文件。Pull Request 只执行检查，不会发布 Release；也可以在 Actions 页面通过 **Run workflow** 手动构建并发布。
 
 本地构建静态 Linux amd64 二进制：
 
 ```bash
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
   go build -trimpath -buildvcs=false -ldflags='-s -w' \
-  -o dist/emby-user-manager-linux-amd64 ./cmd/emby-user-manager
+  -o dist/emby-service-portal-linux-amd64 ./cmd/emby-service-portal
 ```
 
 ### Docker 运行
@@ -112,18 +112,18 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
 镜像为多阶段构建的静态二进制 + Alpine 运行层（含 CA 证书和 IANA 时区数据），以非 root 用户运行：
 
 ```bash
-docker build -t emby-user-manager .
-docker run -d --name emby-user-manager \
+docker build -t emby-service-portal .
+docker run -d --name emby-service-portal \
   -p 127.0.0.1:8081:8080 \
-  -e EUM_DATABASE_PATH=/data/emby-user-manager.db \
-  -e EUM_EMBY_BASE_URL=https://emby.example.com/emby \
-  -e EUM_EMBY_API_KEY=... \
-  -e EUM_API_KEY=... \
-  -e EUM_CREDENTIAL_MASTER_KEY=... \
-  -e EUM_ADMIN_USERNAME=admin \
-  -e EUM_ADMIN_PASSWORD=... \
+  -e ESP_DATABASE_PATH=/data/emby-service-portal.db \
+  -e ESP_EMBY_BASE_URL=https://emby.example.com/emby \
+  -e ESP_EMBY_API_KEY=... \
+  -e ESP_API_KEY=... \
+  -e ESP_CREDENTIAL_MASTER_KEY=... \
+  -e ESP_ADMIN_USERNAME=admin \
+  -e ESP_ADMIN_PASSWORD=... \
   -v eum-data:/data \
-  emby-user-manager
+  emby-service-portal
 ```
 
 数据库放在挂载卷 `/data` 下以便备份；同样建议只暴露到本机反向代理。
@@ -133,11 +133,11 @@ docker run -d --name emby-user-manager \
 将二进制、`.env` 和 `scripts/install-linux-service.sh` 放到服务器。脚本会创建专用非 root 用户、保护数据库目录并安装 systemd 沙箱：
 
 ```bash
-sudo mkdir -p /opt/embyUserManager
-sudo install -m 0755 emby-user-manager-linux-amd64 /opt/embyUserManager/
-sudo install -m 0600 .env /opt/embyUserManager/.env
+sudo mkdir -p /opt/emby-service-portal
+sudo install -m 0755 emby-service-portal-linux-amd64 /opt/emby-service-portal/
+sudo install -m 0600 .env /opt/emby-service-portal/.env
 sudo bash scripts/install-linux-service.sh
-sudo systemctl status emby-user-manager
+sudo systemctl status emby-service-portal
 ```
 
 反向代理到 `127.0.0.1:8081` 并启用 HTTPS。不要让应用端口直接暴露到不可信网络。
@@ -147,7 +147,7 @@ sudo systemctl status emby-user-manager
 除 `GET /api/v1/health` 外，管理 API 都需要：
 
 ```http
-X-API-Key: <EUM_API_KEY>
+X-API-Key: <ESP_API_KEY>
 ```
 
 创建业务账号和邀请码注册还必须带唯一、可重试的请求键：
@@ -171,15 +171,15 @@ Idempotency-Key: <随机请求标识>
 示例停止服务后的备份：
 
 ```bash
-sudo systemctl stop emby-user-manager
-sudo cp /opt/embyUserManager/data/emby-user-manager.db /root/emby-user-manager-$(date +%F).db
-sudo systemctl start emby-user-manager
+sudo systemctl stop emby-service-portal
+sudo cp /opt/emby-service-portal/data/emby-service-portal.db /root/emby-service-portal-$(date +%F).db
+sudo systemctl start emby-service-portal
 ```
 
 查看运行日志：
 
 ```bash
-sudo journalctl -u emby-user-manager -f
+sudo journalctl -u emby-service-portal -f
 ```
 
 ## 开发与质量检查
@@ -199,7 +199,7 @@ GitHub Actions 会运行格式检查、依赖校验、测试、race 检测、覆
 ## 项目结构
 
 ```text
-cmd/emby-user-manager/    程序入口
+cmd/emby-service-portal/    程序入口
 internal/
 ├── app/                  模块装配（组合根）
 ├── accounts/             业务账号生命周期与注册 Saga
@@ -220,11 +220,19 @@ internal/
 ├── portal/               用户中心
 ├── ratelimit/            登录/注册/续费限流
 ├── settings/             显示时区设置
-└── web/                  HTTP 层
+└── web/                  HTTP 层（按页面域拆分）
     ├── web.go            Server、路由、中间件与共享助手
     ├── api.go            REST API（/api/v1/*）
-    ├── admin.go          管理后台页面（/admin/*）
-    ├── portal.go         用户中心与公开页（/portal/*、/register、/renew）
+    ├── public.go         公开门户页（/、/register、/renew、结果页）
+    ├── portal.go         用户中心（/portal/*）
+    ├── payment.go        购买与支付（/purchase、/payment/*、回调）
+    ├── admin_login.go    管理员登录与登出
+    ├── admin_dashboard.go 工作台
+    ├── admin_accounts.go 账号管理
+    ├── admin_invites.go  邀请码管理
+    ├── admin_plans.go    售卖方案
+    ├── admin_orders.go   支付订单
+    ├── admin_settings.go 系统设置
     └── admin/            后台 HTML 模板
 scripts/                  安装脚本
 docs/                     API 文档与架构决策

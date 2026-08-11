@@ -1,14 +1,14 @@
 {{define "payment"}}<!doctype html>
 <html lang="zh-CN">
 <head>
-  {{template "head" "微信支付 · Emby 服务"}}
+  {{template "head" "微信支付 · Emby Service Portal"}}
 </head>
 <body>
 <main class="auth-shell payment-shell">
   <section class="auth-card payment-card" data-payment-page data-payment-token="{{.PaymentOrder.PublicToken}}">
     <div class="brand">
       <span class="brand-mark" aria-hidden="true">E</span>
-      <span class="brand-copy"><strong>Emby 服务</strong><small>SECURE CHECKOUT</small></span>
+      <span class="brand-copy"><strong>Emby Service Portal</strong><small>SECURE CHECKOUT</small></span>
     </div>
     <p class="eyebrow">微信支付</p>
     <h1 class="page-title">{{.PaymentOrder.PlanName}}</h1>

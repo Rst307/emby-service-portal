@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/emby-user-manager/emby-user-manager/internal/accounts"
-	"github.com/emby-user-manager/emby-user-manager/internal/credentials"
-	"github.com/emby-user-manager/emby-user-manager/internal/invites"
-	"github.com/emby-user-manager/emby-user-manager/internal/paymentcenter"
-	"github.com/emby-user-manager/emby-user-manager/internal/persistence/sqlite"
+	"github.com/Rst307/emby-service-portal/internal/accounts"
+	"github.com/Rst307/emby-service-portal/internal/credentials"
+	"github.com/Rst307/emby-service-portal/internal/invites"
+	"github.com/Rst307/emby-service-portal/internal/paymentcenter"
+	"github.com/Rst307/emby-service-portal/internal/persistence/sqlite"
 )
 
 const (
@@ -540,7 +540,7 @@ func resolveReturnURL(template, publicToken, merchantOrderNo string) (string, er
 
 func validateReturnURLTemplate(value string) error {
 	if strings.ContainsAny(value, "{}") {
-		resolved := strings.NewReplacer("{token}", "EUM-SAMPLE-TOKEN", "{order_no}", "EUM-SAMPLE-ORDER", "{merchant_order_no}", "EUM-SAMPLE-ORDER").Replace(value)
+		resolved := strings.NewReplacer("{token}", "ESP-SAMPLE-TOKEN", "{order_no}", "ESP-SAMPLE-ORDER", "{merchant_order_no}", "ESP-SAMPLE-ORDER").Replace(value)
 		if strings.ContainsAny(resolved, "{}") {
 			return fmt.Errorf("支付后跳转地址只支持 {token}、{order_no} 或 {merchant_order_no} 占位符")
 		}
@@ -592,5 +592,5 @@ func newMerchantOrderNo() (string, error) {
 	if _, err := rand.Read(value); err != nil {
 		return "", err
 	}
-	return "EUM-" + time.Now().UTC().Format("20060102150405") + "-" + base64.RawURLEncoding.EncodeToString(value), nil
+	return "ESP-" + time.Now().UTC().Format("20060102150405") + "-" + base64.RawURLEncoding.EncodeToString(value), nil
 }
