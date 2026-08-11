@@ -80,6 +80,7 @@ type CreateOrderInput struct {
 	Currency         string
 	Subject          string
 	ExpiresInSeconds int
+	ReturnURL        string
 }
 
 // Notification is the verified, provider-neutral paid event.
@@ -116,7 +117,8 @@ func (c *Client) CreateOrder(ctx context.Context, cfg Config, input CreateOrderI
 		Currency         string `json:"currency"`
 		Subject          string `json:"subject"`
 		ExpiresInSeconds int    `json:"expires_in_seconds"`
-	}{input.MerchantOrderNo, input.AmountFen, input.Currency, input.Subject, input.ExpiresInSeconds}
+		ReturnURL        string `json:"return_url,omitempty"`
+	}{input.MerchantOrderNo, input.AmountFen, input.Currency, input.Subject, input.ExpiresInSeconds, input.ReturnURL}
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return Order{}, fmt.Errorf("marshal payment order: %w", err)

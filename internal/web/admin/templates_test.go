@@ -177,7 +177,7 @@ func TestRenderSettingsShowsSelectedTimeZone(t *testing.T) {
 		},
 	})
 	page := response.Body.String()
-	for _, marker := range []string{"显示时区", "保存设置", `value="Asia/Shanghai" selected`, "UTC&#43;08:00", "当前显示时区：Asia/Shanghai", "__custom__", "data-time-zone-select", "data-custom-time-zone", "/admin/settings"} {
+	for _, marker := range []string{"显示时区", "保存设置", `value="Asia/Shanghai" selected`, "UTC&#43;08:00", "当前显示时区：Asia/Shanghai", "__custom__", "data-time-zone-select", "data-custom-time-zone", "支付后跳转地址（可选）", "/admin/settings"} {
 		if !strings.Contains(page, marker) {
 			t.Fatalf("settings page missing %q: %s", marker, page)
 		}

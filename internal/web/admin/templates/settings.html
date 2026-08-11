@@ -76,7 +76,10 @@
           <label class="field">支付回调地址
             <input name="callback_url" type="url" value="{{.PaymentSettings.CallbackURL}}" placeholder="例如：https://emby.example.com/webhooks/wxpay-payment-center" autocomplete="url">
           </label>
-          <p class="subtle">将这个回调地址原样填入支付中心应用设置。生产环境必须使用 HTTPS；本地联调可使用 localhost HTTP。</p>
+          <label class="field">支付后跳转地址（可选）
+            <input name="return_url" type="url" value="{{.PaymentSettings.ReturnURL}}" placeholder="例如：https://emby.example.com/payment/{token}" autocomplete="url">
+          </label>
+          <p class="subtle">支付中心约 3 秒后将用户带回此地址。支持 <code>{token}</code>、<code>{order_no}</code> 占位符；生产环境必须使用 HTTPS。它是用户回跳地址，不是服务器支付回调地址。</p>
           <div class="form-actions">
             <button type="submit">保存支付设置</button>
           </div>

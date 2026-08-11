@@ -150,7 +150,7 @@ func (s *Server) adminPaymentSettingsUpdate(w http.ResponseWriter, r *http.Reque
 	}
 	err = s.payments.UpdateSettings(r.Context(), payments.UpdatePaymentSettingsInput{
 		BaseURL: r.Form.Get("base_url"), AppID: r.Form.Get("app_id"), AppSecret: r.Form.Get("app_secret"),
-		CallbackURL: r.Form.Get("callback_url"), OrderTTLMinutes: ttl,
+		CallbackURL: r.Form.Get("callback_url"), ReturnURL: r.Form.Get("return_url"), OrderTTLMinutes: ttl,
 	})
 	if err != nil {
 		name, location := s.displayZone(r)

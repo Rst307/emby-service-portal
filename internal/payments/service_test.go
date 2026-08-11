@@ -5,6 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -27,6 +28,15 @@ func TestActivationOrderIsFulfilledFromVerifiedPaymentCenterCallback(t *testing.
 			t.Fatalf("provider request = %s %s", r.Method, r.URL.Path)
 		}
 		body, _ := io.ReadAll(r.Body)
+		var request struct {
+			ReturnURL string `json:"return_url"`
+		}
+		if err := json.Unmarshal(body, &request); err != nil {
+			t.Fatalf("decode provider request: %v", err)
+		}
+		if !strings.HasPrefix(request.ReturnURL, "https://user.example/payment/") || !strings.Contains(request.ReturnURL, "order=EUM-") || strings.Contains(request.ReturnURL, "{") {
+			t.Fatalf("return_url = %q", request.ReturnURL)
+		}
 		if got := signForTest(secret, r.Method, r.URL.Path, r.Header.Get("X-Pay-Timestamp"), r.Header.Get("X-Pay-Nonce"), body); got != r.Header.Get("X-Pay-Signature") {
 			t.Fatalf("provider request signature mismatch")
 		}
@@ -44,7 +54,7 @@ func TestActivationOrderIsFulfilledFromVerifiedPaymentCenterCallback(t *testing.
 	center.Now = func() time.Time { return now }
 	service := New(store, nil, vault, center)
 	service.now = func() time.Time { return now }
-	if err := service.UpdateSettings(ctx, UpdatePaymentSettingsInput{BaseURL: server.URL, AppID: "app_test", AppSecret: secret, CallbackURL: "http://127.0.0.1/webhooks/wxpay-payment-center", OrderTTLMinutes: 15}); err != nil {
+	if err := service.UpdateSettings(ctx, UpdatePaymentSettingsInput{BaseURL: server.URL, AppID: "app_test", AppSecret: secret, CallbackURL: "http://127.0.0.1/webhooks/wxpay-payment-center", ReturnURL: "https://user.example/payment/{token}?order={order_no}", OrderTTLMinutes: 15}); err != nil {
 		t.Fatal(err)
 	}
 	plan, err := service.CreatePlan(ctx, sqlite.CreatePaymentPlanInput{Kind: KindActivation, Name: "月卡", DurationDays: 30, PriceFen: 990})

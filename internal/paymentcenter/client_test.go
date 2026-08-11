@@ -32,7 +32,7 @@ func TestCreateOrderSignsExactRequestBody(t *testing.T) {
 		if err := json.Unmarshal(body, &payload); err != nil {
 			t.Fatal(err)
 		}
-		if payload["amount_fen"] != float64(990) || payload["merchant_order_no"] != "EUM-TEST-1" {
+		if payload["amount_fen"] != float64(990) || payload["merchant_order_no"] != "EUM-TEST-1" || payload["return_url"] != "https://user.example/payment/token" {
 			t.Fatalf("payload = %s", body)
 		}
 		_, _ = w.Write([]byte(`{"merchant_order_no":"EUM-TEST-1","amount_fen":990,"currency":"CNY","subject":"月卡","status":"PENDING","payment_memo":"PCABC123","payment_url":"https://pay.test/pay/abc","expires_at":"2026-08-10T12:15:00+00:00"}`))
@@ -41,7 +41,7 @@ func TestCreateOrderSignsExactRequestBody(t *testing.T) {
 
 	client := NewClient(server.Client())
 	client.Now = func() time.Time { return fixed }
-	order, err := client.CreateOrder(context.Background(), Config{BaseURL: server.URL, AppID: "app_test", AppSecret: secret}, CreateOrderInput{MerchantOrderNo: "EUM-TEST-1", AmountFen: 990, Currency: "CNY", Subject: "月卡", ExpiresInSeconds: 900})
+	order, err := client.CreateOrder(context.Background(), Config{BaseURL: server.URL, AppID: "app_test", AppSecret: secret}, CreateOrderInput{MerchantOrderNo: "EUM-TEST-1", AmountFen: 990, Currency: "CNY", Subject: "月卡", ExpiresInSeconds: 900, ReturnURL: "https://user.example/payment/token"})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -27,6 +27,7 @@ const (
 	paymentAppIDKey     = "payment_center.app_id"
 	paymentAppSecretKey = "payment_center.app_secret"
 	paymentCallbackKey  = "payment_center.callback_url"
+	paymentReturnKey    = "payment_center.return_url"
 	paymentTTLKey       = "payment_center.order_ttl_minutes"
 	paymentSecretName   = "payment-center-app-secret"
 )
@@ -41,6 +42,7 @@ type PaymentSettings struct {
 	BaseURL          string
 	AppID            string
 	CallbackURL      string
+	ReturnURL        string
 	OrderTTLMinutes  int
 	Configured       bool
 	SecretConfigured bool
@@ -51,6 +53,7 @@ type UpdatePaymentSettingsInput struct {
 	AppID           string
 	AppSecret       string
 	CallbackURL     string
+	ReturnURL       string
 	OrderTTLMinutes int
 }
 
@@ -82,6 +85,10 @@ func (s *Service) Settings(ctx context.Context) (PaymentSettings, error) {
 	if err != nil {
 		return PaymentSettings{}, err
 	}
+	returnURL, _, err := s.store.Setting(ctx, paymentReturnKey)
+	if err != nil {
+		return PaymentSettings{}, err
+	}
 	ttl := 15
 	if raw, ok, err := s.store.Setting(ctx, paymentTTLKey); err != nil {
 		return PaymentSettings{}, err
@@ -95,13 +102,14 @@ func (s *Service) Settings(ctx context.Context) (PaymentSettings, error) {
 		return PaymentSettings{}, err
 	}
 	configured := strings.TrimSpace(baseURL) != "" && strings.TrimSpace(appID) != "" && secret != ""
-	return PaymentSettings{BaseURL: baseURL, AppID: appID, CallbackURL: callbackURL, OrderTTLMinutes: ttl, Configured: configured, SecretConfigured: secretConfigured}, nil
+	return PaymentSettings{BaseURL: baseURL, AppID: appID, CallbackURL: callbackURL, ReturnURL: returnURL, OrderTTLMinutes: ttl, Configured: configured, SecretConfigured: secretConfigured}, nil
 }
 
 func (s *Service) UpdateSettings(ctx context.Context, input UpdatePaymentSettingsInput) error {
 	input.BaseURL = strings.TrimRight(strings.TrimSpace(input.BaseURL), "/")
 	input.AppID = strings.TrimSpace(input.AppID)
 	input.CallbackURL = strings.TrimSpace(input.CallbackURL)
+	input.ReturnURL = strings.TrimSpace(input.ReturnURL)
 	if input.OrderTTLMinutes < 1 || input.OrderTTLMinutes > 1440 {
 		return fmt.Errorf("订单有效期必须在 1 到 1440 分钟之间")
 	}
@@ -123,6 +131,11 @@ func (s *Service) UpdateSettings(ctx context.Context, input UpdatePaymentSetting
 			return fmt.Errorf("支付回调地址路径必须是 /webhooks/wxpay-payment-center")
 		}
 	}
+	if input.ReturnURL != "" {
+		if err := validateReturnURLTemplate(input.ReturnURL); err != nil {
+			return err
+		}
+	}
 	if input.BaseURL != "" || input.AppID != "" || input.AppSecret != "" {
 		if input.BaseURL == "" || input.AppID == "" {
 			return fmt.Errorf("启用支付中心时必须填写地址和 App ID")
@@ -133,7 +146,8 @@ func (s *Service) UpdateSettings(ctx context.Context, input UpdatePaymentSetting
 	}
 	values := map[string]string{
 		paymentBaseURLKey: input.BaseURL, paymentAppIDKey: input.AppID,
-		paymentCallbackKey: input.CallbackURL, paymentTTLKey: fmt.Sprintf("%d", input.OrderTTLMinutes),
+		paymentCallbackKey: input.CallbackURL, paymentReturnKey: input.ReturnURL,
+		paymentTTLKey: fmt.Sprintf("%d", input.OrderTTLMinutes),
 	}
 	if strings.TrimSpace(input.AppSecret) != "" {
 		if s.vault == nil {
@@ -276,6 +290,10 @@ func (s *Service) createOrder(ctx context.Context, kind string, planID int64, ac
 	if err != nil {
 		return sqlite.PaymentOrder{}, err
 	}
+	returnURL, err := resolveReturnURL(view.ReturnURL, publicToken, merchantNo)
+	if err != nil {
+		return sqlite.PaymentOrder{}, err
+	}
 	localOrder, err := s.store.CreatePaymentOrder(ctx, sqlite.CreatePaymentOrderInput{
 		PublicToken: publicToken, MerchantOrderNo: merchantNo, Kind: kind, PlanID: plan.ID, PlanName: plan.Name,
 		AccountID: accountID, AccountUsername: username, DurationDays: plan.DurationDays, DurationMinutes: plan.DurationMinutes,
@@ -284,7 +302,7 @@ func (s *Service) createOrder(ctx context.Context, kind string, planID int64, ac
 	if err != nil {
 		return sqlite.PaymentOrder{}, err
 	}
-	providerOrder, err := s.center.CreateOrder(ctx, cfg, paymentcenter.CreateOrderInput{MerchantOrderNo: merchantNo, AmountFen: plan.PriceFen, Currency: "CNY", Subject: plan.Name, ExpiresInSeconds: view.OrderTTLMinutes * 60})
+	providerOrder, err := s.center.CreateOrder(ctx, cfg, paymentcenter.CreateOrderInput{MerchantOrderNo: merchantNo, AmountFen: plan.PriceFen, Currency: "CNY", Subject: plan.Name, ExpiresInSeconds: view.OrderTTLMinutes * 60, ReturnURL: returnURL})
 	if err != nil {
 		return localOrder, fmt.Errorf("创建微信支付订单失败：%w", err)
 	}
@@ -400,6 +418,44 @@ func (s *Service) Reconcile(ctx context.Context) error {
 		}
 	}
 	return firstErr
+}
+
+func resolveReturnURL(template, publicToken, merchantOrderNo string) (string, error) {
+	value := strings.TrimSpace(template)
+	if value == "" {
+		return "", nil
+	}
+	resolved := strings.NewReplacer(
+		"{token}", publicToken,
+		"{order_no}", merchantOrderNo,
+		"{merchant_order_no}", merchantOrderNo,
+	).Replace(value)
+	if err := validateReturnURL(resolved); err != nil {
+		return "", err
+	}
+	return resolved, nil
+}
+
+func validateReturnURLTemplate(value string) error {
+	if strings.ContainsAny(value, "{}") {
+		resolved := strings.NewReplacer("{token}", "EUM-SAMPLE-TOKEN", "{order_no}", "EUM-SAMPLE-ORDER", "{merchant_order_no}", "EUM-SAMPLE-ORDER").Replace(value)
+		if strings.ContainsAny(resolved, "{}") {
+			return fmt.Errorf("支付后跳转地址只支持 {token}、{order_no} 或 {merchant_order_no} 占位符")
+		}
+		return validateReturnURL(resolved)
+	}
+	return validateReturnURL(value)
+}
+
+func validateReturnURL(value string) error {
+	if len(value) > 2048 {
+		return fmt.Errorf("支付后跳转地址不能超过 2048 个字符")
+	}
+	parsed, err := url.Parse(value)
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.Fragment != "" {
+		return fmt.Errorf("支付后跳转地址必须是完整的 HTTPS 地址，不能包含用户名、密码或片段")
+	}
+	return nil
 }
 
 func parseProviderTime(value string, fallback time.Time) time.Time {
