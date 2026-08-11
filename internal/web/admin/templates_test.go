@@ -144,6 +144,23 @@ func TestRenderPlanEditShowsFocusedEditor(t *testing.T) {
 	}
 }
 
+func TestRenderOrdersShowsBuyerAndSearchControls(t *testing.T) {
+	templates, err := NewTemplates(time.UTC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	templates.Render(response, "orders", ViewData{
+		CSRFToken: "csrf", PaymentOrders: []sqlite.PaymentOrder{{ID: 7, MerchantOrderNo: "EUM-ORDER-7", PublicToken: "token-7", Kind: "activation", PlanName: "月卡", DurationMinutes: 30 * 24 * 60, BuyerInfo: "张三 / wx-z3", AmountFen: 990, Currency: "CNY", PaymentStatus: "paid", FulfillmentStatus: "completed", CreatedAt: time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)}}, OrderTotal: 1, OrderPaidCount: 1, OrderPaidFen: 990, OrderPage: 1, OrderPageSize: 20,
+	})
+	page := response.Body.String()
+	for _, marker := range []string{"支付订单", "订单号、商品、购买人", "张三 / wx-z3", "EUM-ORDER-7", "已付款", "查询订单", "商品类型", "/payment/token-7"} {
+		if !strings.Contains(page, marker) {
+			t.Fatalf("orders page missing %q: %s", marker, page)
+		}
+	}
+}
+
 func TestRenderPaymentShowsCheckoutAndActivationCode(t *testing.T) {
 	templates, err := NewTemplates(time.UTC)
 	if err != nil {

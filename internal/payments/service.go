@@ -200,6 +200,29 @@ func (s *Service) ListPlans(ctx context.Context, kind string, enabledOnly bool) 
 	return s.store.ListPaymentPlans(ctx, kind, enabledOnly)
 }
 
+func (s *Service) ListOrders(ctx context.Context, filter sqlite.PaymentOrderFilter) (sqlite.PaymentOrderPage, error) {
+	if filter.Status != "" && !isPaymentOrderStatus(filter.Status) {
+		filter.Status = ""
+	}
+	if filter.Kind != "" && filter.Kind != KindActivation && filter.Kind != KindRenewal {
+		filter.Kind = ""
+	}
+	filter.Query = strings.TrimSpace(filter.Query)
+	if query := []rune(filter.Query); len(query) > 100 {
+		filter.Query = string(query[:100])
+	}
+	return s.store.ListPaymentOrders(ctx, filter)
+}
+
+func isPaymentOrderStatus(status string) bool {
+	switch status {
+	case "pending", "paid", "expired", "canceled", "failed":
+		return true
+	default:
+		return false
+	}
+}
+
 func (s *Service) FindPlan(ctx context.Context, id int64) (sqlite.PaymentPlan, error) {
 	return s.store.FindPaymentPlan(ctx, id)
 }
@@ -252,8 +275,12 @@ func validatePlan(kind, name string, days, price int, _ string) error {
 	return nil
 }
 
-func (s *Service) CreateActivationOrder(ctx context.Context, planID int64) (sqlite.PaymentOrder, error) {
-	return s.createOrder(ctx, KindActivation, planID, nil, "")
+func (s *Service) CreateActivationOrder(ctx context.Context, planID int64, buyerInfo ...string) (sqlite.PaymentOrder, error) {
+	buyer := ""
+	if len(buyerInfo) > 0 {
+		buyer = buyerInfo[0]
+	}
+	return s.createOrder(ctx, KindActivation, planID, nil, "", buyer)
 }
 
 func (s *Service) CreateRenewalOrder(ctx context.Context, planID int64, username, password string) (sqlite.PaymentOrder, error) {
@@ -265,10 +292,14 @@ func (s *Service) CreateRenewalOrder(ctx context.Context, planID int64, username
 	if err != nil {
 		return sqlite.PaymentOrder{}, errors.New("账号不存在")
 	}
-	return s.createOrder(ctx, KindRenewal, planID, &account.ID, account.Username)
+	return s.createOrder(ctx, KindRenewal, planID, &account.ID, account.Username, account.Username)
 }
 
-func (s *Service) createOrder(ctx context.Context, kind string, planID int64, accountID *int64, username string) (sqlite.PaymentOrder, error) {
+func (s *Service) createOrder(ctx context.Context, kind string, planID int64, accountID *int64, username, buyerInfo string) (sqlite.PaymentOrder, error) {
+	buyerInfo = strings.TrimSpace(buyerInfo)
+	if len(buyerInfo) > 200 {
+		return sqlite.PaymentOrder{}, errors.New("购买人或联系方式不能超过 200 个字符")
+	}
 	cfg, err := s.providerConfig(ctx)
 	if err != nil {
 		return sqlite.PaymentOrder{}, err
@@ -296,7 +327,7 @@ func (s *Service) createOrder(ctx context.Context, kind string, planID int64, ac
 	}
 	localOrder, err := s.store.CreatePaymentOrder(ctx, sqlite.CreatePaymentOrderInput{
 		PublicToken: publicToken, MerchantOrderNo: merchantNo, Kind: kind, PlanID: plan.ID, PlanName: plan.Name,
-		AccountID: accountID, AccountUsername: username, DurationDays: plan.DurationDays, DurationMinutes: plan.DurationMinutes,
+		AccountID: accountID, AccountUsername: username, BuyerInfo: buyerInfo, DurationDays: plan.DurationDays, DurationMinutes: plan.DurationMinutes,
 		AmountFen: plan.PriceFen, Currency: "CNY", ExpiresAt: now.Add(time.Duration(view.OrderTTLMinutes) * time.Minute), Now: now,
 	})
 	if err != nil {

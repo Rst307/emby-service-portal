@@ -69,6 +69,7 @@ func (s *Store) migrate(ctx context.Context) error {
 		{"0010_account_create_operations", "migrations/0010_account_create_operations.sql"},
 		{"0011_settings", "migrations/0011_settings.sql"},
 		{"0012_payment_catalog", "migrations/0012_payment_catalog.sql"},
+		{"0013_payment_order_buyer", "migrations/0013_payment_order_buyer.sql"},
 	}
 	for _, migration := range migrations {
 		if err := s.applyMigration(ctx, migration.version, migration.file); err != nil {

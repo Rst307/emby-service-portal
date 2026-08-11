@@ -160,6 +160,7 @@ type PaymentOrder struct {
 	PlanName           string
 	AccountID          *int64
 	AccountUsername    string
+	BuyerInfo          string
 	DurationDays       int
 	DurationMinutes    int
 	AmountFen          int
@@ -206,12 +207,34 @@ type CreatePaymentOrderInput struct {
 	PlanName        string
 	AccountID       *int64
 	AccountUsername string
+	BuyerInfo       string
 	DurationDays    int
 	DurationMinutes int
 	AmountFen       int
 	Currency        string
 	ExpiresAt       time.Time
 	Now             time.Time
+}
+
+// PaymentOrderFilter controls the administrator order search. Page numbers are 1-based.
+type PaymentOrderFilter struct {
+	Query    string
+	Status   string
+	Kind     string
+	Page     int
+	PageSize int
+}
+
+// PaymentOrderPage is a bounded, auditable slice of payment orders plus totals
+// for the current filter.
+type PaymentOrderPage struct {
+	Orders        []PaymentOrder
+	Total         int
+	PaidCount     int
+	PaidAmountFen int
+	Page          int
+	PageSize      int
+	TotalPages    int
 }
 
 type UpdatePaymentProviderInput struct {

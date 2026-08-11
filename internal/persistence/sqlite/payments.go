@@ -121,10 +121,10 @@ func (s *Store) DeletePaymentPlan(ctx context.Context, id int64) error {
 	return ErrPaymentPlanInUse
 }
 
-const paymentOrderSelect = `SELECT id, public_token, merchant_order_no, kind, plan_id, plan_name, account_id, account_username, duration_days, duration_minutes, amount_fen, currency, payment_status, fulfillment_status, provider_status, payment_url, payment_memo, provider_payment_key, invite_id, failure_reason, expires_at, paid_at, created_at, updated_at FROM payment_orders`
+const paymentOrderSelect = `SELECT id, public_token, merchant_order_no, kind, plan_id, plan_name, account_id, account_username, buyer_info, duration_days, duration_minutes, amount_fen, currency, payment_status, fulfillment_status, provider_status, payment_url, payment_memo, provider_payment_key, invite_id, failure_reason, expires_at, paid_at, created_at, updated_at FROM payment_orders`
 
 func (s *Store) CreatePaymentOrder(ctx context.Context, input CreatePaymentOrderInput) (PaymentOrder, error) {
-	result, err := s.db.ExecContext(ctx, `INSERT INTO payment_orders(public_token, merchant_order_no, kind, plan_id, plan_name, account_id, account_username, duration_days, duration_minutes, amount_fen, currency, payment_status, fulfillment_status, expires_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'pending', ?, ?, ?)`, input.PublicToken, input.MerchantOrderNo, input.Kind, input.PlanID, input.PlanName, input.AccountID, strings.TrimSpace(input.AccountUsername), input.DurationDays, input.DurationMinutes, input.AmountFen, input.Currency, timestamp(input.ExpiresAt), timestamp(input.Now), timestamp(input.Now))
+	result, err := s.db.ExecContext(ctx, `INSERT INTO payment_orders(public_token, merchant_order_no, kind, plan_id, plan_name, account_id, account_username, buyer_info, duration_days, duration_minutes, amount_fen, currency, payment_status, fulfillment_status, expires_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'pending', ?, ?, ?)`, input.PublicToken, input.MerchantOrderNo, input.Kind, input.PlanID, input.PlanName, input.AccountID, strings.TrimSpace(input.AccountUsername), strings.TrimSpace(input.BuyerInfo), input.DurationDays, input.DurationMinutes, input.AmountFen, input.Currency, timestamp(input.ExpiresAt), timestamp(input.Now), timestamp(input.Now))
 	if err != nil {
 		return PaymentOrder{}, err
 	}
@@ -165,6 +165,78 @@ func (s *Store) ListPendingPaymentOrders(ctx context.Context, limit int) ([]Paym
 		orders = append(orders, order)
 	}
 	return orders, rows.Err()
+}
+
+// ListPaymentOrders returns a bounded administrator view of orders. Search
+// deliberately uses local snapshots, so it remains useful after a plan or
+// account has changed and never depends on the payment provider being online.
+func (s *Store) ListPaymentOrders(ctx context.Context, filter PaymentOrderFilter) (PaymentOrderPage, error) {
+	page := filter.Page
+	if page < 1 {
+		page = 1
+	}
+	pageSize := filter.PageSize
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+	conditions := make([]string, 0, 3)
+	args := make([]any, 0, 6)
+	if query := strings.TrimSpace(filter.Query); query != "" {
+		pattern := "%" + escapeLike(query) + "%"
+		conditions = append(conditions, `(merchant_order_no LIKE ? ESCAPE '\' OR plan_name LIKE ? ESCAPE '\' OR account_username LIKE ? ESCAPE '\' OR buyer_info LIKE ? ESCAPE '\' OR payment_memo LIKE ? ESCAPE '\')`)
+		for i := 0; i < 5; i++ {
+			args = append(args, pattern)
+		}
+	}
+	if status := strings.TrimSpace(filter.Status); status != "" {
+		conditions = append(conditions, "payment_status = ?")
+		args = append(args, status)
+	}
+	if kind := strings.TrimSpace(filter.Kind); kind != "" {
+		conditions = append(conditions, "kind = ?")
+		args = append(args, kind)
+	}
+	where := ""
+	if len(conditions) > 0 {
+		where = " WHERE " + strings.Join(conditions, " AND ")
+	}
+	var result PaymentOrderPage
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*), COALESCE(SUM(CASE WHEN payment_status = 'paid' THEN 1 ELSE 0 END), 0), COALESCE(SUM(CASE WHEN payment_status = 'paid' THEN amount_fen ELSE 0 END), 0) FROM payment_orders`+where, args...).Scan(&result.Total, &result.PaidCount, &result.PaidAmountFen); err != nil {
+		return PaymentOrderPage{}, err
+	}
+	result.Page = page
+	result.PageSize = pageSize
+	result.TotalPages = (result.Total + pageSize - 1) / pageSize
+	if result.TotalPages == 0 {
+		result.Page = 1
+	} else if page > result.TotalPages {
+		result.Page = result.TotalPages
+	}
+	listArgs := append([]any{}, args...)
+	listArgs = append(listArgs, pageSize, (result.Page-1)*pageSize)
+	rows, err := s.db.QueryContext(ctx, paymentOrderSelect+where+` ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`, listArgs...)
+	if err != nil {
+		return PaymentOrderPage{}, err
+	}
+	defer rows.Close()
+	result.Orders = make([]PaymentOrder, 0, pageSize)
+	for rows.Next() {
+		order, err := scanPaymentOrder(rows)
+		if err != nil {
+			return PaymentOrderPage{}, err
+		}
+		result.Orders = append(result.Orders, order)
+	}
+	if err := rows.Err(); err != nil {
+		return PaymentOrderPage{}, err
+	}
+	return result, nil
+}
+
+func escapeLike(value string) string {
+	value = strings.ReplaceAll(value, `\`, `\\`)
+	value = strings.ReplaceAll(value, `%`, `\%`)
+	return strings.ReplaceAll(value, `_`, `\_`)
 }
 
 func (s *Store) UpdatePaymentProvider(ctx context.Context, input UpdatePaymentProviderInput) (PaymentOrder, error) {
@@ -358,7 +430,7 @@ func scanPaymentOrder(row interface{ Scan(...any) error }) (PaymentOrder, error)
 	var accountID, inviteID sql.NullInt64
 	var paidAt sql.NullString
 	var expires, created, updated string
-	if err := row.Scan(&order.ID, &order.PublicToken, &order.MerchantOrderNo, &order.Kind, &order.PlanID, &order.PlanName, &accountID, &order.AccountUsername, &order.DurationDays, &order.DurationMinutes, &order.AmountFen, &order.Currency, &order.PaymentStatus, &order.FulfillmentStatus, &order.ProviderStatus, &order.PaymentURL, &order.PaymentMemo, &order.ProviderPaymentKey, &inviteID, &order.FailureReason, &expires, &paidAt, &created, &updated); err != nil {
+	if err := row.Scan(&order.ID, &order.PublicToken, &order.MerchantOrderNo, &order.Kind, &order.PlanID, &order.PlanName, &accountID, &order.AccountUsername, &order.BuyerInfo, &order.DurationDays, &order.DurationMinutes, &order.AmountFen, &order.Currency, &order.PaymentStatus, &order.FulfillmentStatus, &order.ProviderStatus, &order.PaymentURL, &order.PaymentMemo, &order.ProviderPaymentKey, &inviteID, &order.FailureReason, &expires, &paidAt, &created, &updated); err != nil {
 		return PaymentOrder{}, err
 	}
 	if accountID.Valid {

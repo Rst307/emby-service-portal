@@ -1,0 +1,136 @@
+{{define "orders"}}<!doctype html>
+<html lang="zh-CN">
+<head>
+  {{template "head" "支付订单 · Emby 账号管理"}}
+</head>
+<body class="admin-body">
+<main class="app-shell">
+  {{template "admin-nav" (dict "active" "orders" "csrf" .CSRFToken)}}
+
+  <section class="page-heading">
+    <div>
+      <p class="eyebrow">交易记录</p>
+      <h1 class="page-title">支付订单</h1>
+      <p class="page-lead">按订单号、商品、购买人或业务账号查询订单；支付订单会保留商品和购买人快照，方便核对与追溯。</p>
+    </div>
+    <a class="page-heading-action" href="/admin/plans">管理售卖方案 <span>→</span></a>
+  </section>
+
+  {{template "alerts" .}}
+
+  <section class="order-summary-grid" aria-label="订单统计">
+    <article class="order-summary-card">
+      <span class="order-summary-label">筛选结果</span>
+      <strong>{{.OrderTotal}}</strong>
+      <small>笔订单</small>
+    </article>
+    <article class="order-summary-card order-summary-paid">
+      <span class="order-summary-label">已付款</span>
+      <strong>{{.OrderPaidCount}}</strong>
+      <small>笔已确认支付</small>
+    </article>
+    <article class="order-summary-card order-summary-money">
+      <span class="order-summary-label">已付款金额</span>
+      <strong>{{formatMoney .OrderPaidFen}}</strong>
+      <small>当前筛选范围</small>
+    </article>
+  </section>
+
+  <section class="panel order-filter-panel">
+    <div class="panel-body">
+      <form method="get" action="/admin/orders" class="order-filters">
+        <label class="field order-search-field">搜索订单
+          <input name="q" value="{{.OrderQuery}}" placeholder="订单号、商品、购买人、账号、付款备注" autocomplete="off">
+        </label>
+        <label class="field">订单状态
+          <select name="status">
+            <option value=""{{if eq .OrderStatus ""}} selected{{end}}>全部状态</option>
+            <option value="pending"{{if eq .OrderStatus "pending"}} selected{{end}}>等待付款</option>
+            <option value="paid"{{if eq .OrderStatus "paid"}} selected{{end}}>已付款</option>
+            <option value="expired"{{if eq .OrderStatus "expired"}} selected{{end}}>已过期</option>
+            <option value="canceled"{{if eq .OrderStatus "canceled"}} selected{{end}}>已取消</option>
+            <option value="failed"{{if eq .OrderStatus "failed"}} selected{{end}}>处理失败</option>
+          </select>
+        </label>
+        <label class="field">商品类型
+          <select name="kind">
+            <option value=""{{if eq .OrderKind ""}} selected{{end}}>全部商品</option>
+            <option value="activation"{{if eq .OrderKind "activation"}} selected{{end}}>激活码</option>
+            <option value="renewal"{{if eq .OrderKind "renewal"}} selected{{end}}>订阅续费</option>
+          </select>
+        </label>
+        <div class="order-filter-actions">
+          <button type="submit">查询订单</button>
+          <a class="secondary-link" href="/admin/orders">重置</a>
+        </div>
+      </form>
+      <p class="filter-hint">激活码订单的购买人来自购买页填写的信息；续费订单自动记录被续费的业务账号。历史订单如果没有填写过购买人，会显示“未填写”。</p>
+    </div>
+  </section>
+
+  <section class="panel data-panel order-table-panel">
+    <header class="panel-header">
+      <div>
+        <h2 class="panel-title">订单列表</h2>
+        <p class="panel-copy">第 {{.OrderPage}} / {{if .OrderTotalPages}}{{.OrderTotalPages}}{{else}}1{{end}} 页 · 每页 {{.OrderPageSize}} 条</p>
+      </div>
+    </header>
+    <div class="table-wrap">
+      <table class="orders-table">
+        <caption class="sr-only">支付订单查询结果</caption>
+        <thead>
+          <tr>
+            <th scope="col">订单</th>
+            <th scope="col">商品</th>
+            <th scope="col">购买人</th>
+            <th scope="col">金额</th>
+            <th scope="col">支付状态</th>
+            <th scope="col">履约</th>
+            <th scope="col">创建时间</th>
+            <th scope="col" class="col-actions">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+        {{range .PaymentOrders}}
+          <tr>
+            <td>
+              <strong class="order-no">{{.MerchantOrderNo}}</strong>
+              <span class="subtle">#{{.ID}}</span>
+            </td>
+            <td>
+              <strong>{{.PlanName}}</strong>
+              <span class="subtle"><span class="kind-dot kind-{{.Kind}}"></span>{{planKindLabel .Kind}} · {{formatDuration .DurationMinutes}}</span>
+            </td>
+            <td>
+              <strong class="buyer-value">{{orderBuyer .}}</strong>
+              {{if and (eq .BuyerInfo "") (eq .AccountUsername "")}}<span class="subtle">购买页未提供</span>{{else if eq .Kind "renewal"}}<span class="subtle">续费业务账号</span>{{else}}<span class="subtle">购买页填写</span>{{end}}
+            </td>
+            <td><strong class="money-value order-money">{{formatMoney .AmountFen}}</strong><span class="subtle">{{.Currency}}</span></td>
+            <td><span class="badge payment-status-{{.PaymentStatus}}">{{paymentStatusLabel .PaymentStatus}}</span></td>
+            <td><span class="order-fulfillment order-fulfillment-{{.FulfillmentStatus}}">{{if eq .FulfillmentStatus "completed"}}已完成{{else if eq .FulfillmentStatus "failed"}}失败{{else}}处理中{{end}}</span>{{if .FailureReason}}<span class="subtle order-failure">{{.FailureReason}}</span>{{end}}</td>
+            <td><span class="order-date">{{formatTime .CreatedAt "2006-01-02 15:04"}}</span><span class="subtle">{{timeZone}}</span></td>
+            <td>
+              <div class="actions">
+                <a class="table-link" href="/payment/{{.PublicToken}}" target="_blank" rel="noopener">支付页</a>
+                {{if .PaymentURL}}<a class="table-link" href="{{.PaymentURL}}" target="_blank" rel="noopener">收银台</a>{{end}}
+              </div>
+            </td>
+          </tr>
+        {{else}}
+          <tr><td class="empty" colspan="8">没有匹配的支付订单。可以更换关键词或清除筛选条件。</td></tr>
+        {{end}}
+        </tbody>
+      </table>
+    </div>
+    {{if gt .OrderTotalPages 1}}
+    <nav class="pagination" aria-label="订单分页">
+      {{if gt .OrderPage 1}}<a href="/admin/orders?page={{add .OrderPage -1}}{{if .OrderFilterQuery}}&{{.OrderFilterQuery}}{{end}}">上一页</a>{{else}}<span class="disabled">上一页</span>{{end}}
+      <span>第 {{.OrderPage}} / {{.OrderTotalPages}} 页</span>
+      {{if lt .OrderPage .OrderTotalPages}}<a href="/admin/orders?page={{add .OrderPage 1}}{{if .OrderFilterQuery}}&{{.OrderFilterQuery}}{{end}}">下一页</a>{{else}}<span class="disabled">下一页</span>{{end}}
+    </nav>
+    {{end}}
+  </section>
+</main>
+</body>
+</html>
+{{end}}

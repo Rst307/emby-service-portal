@@ -3,7 +3,7 @@
 <head>
   {{template "head" "控制台 · Emby 账号管理"}}
 </head>
-<body>
+<body class="admin-body">
 <main class="app-shell">
   {{template "admin-nav" (dict "active" "dashboard" "csrf" .CSRFToken)}}
 
@@ -36,6 +36,15 @@
       <p class="stat-label">邀请码</p>
       <p class="stat-value">{{.InviteCount}}</p>
     </article>
+    <article class="stat-card orders">
+      <p class="stat-label">支付订单</p>
+      <p class="stat-value">{{.PaymentOrderCount}}</p>
+    </article>
+    <article class="stat-card revenue">
+      <p class="stat-label">已收款</p>
+      <p class="stat-value">{{formatMoney .PaymentRevenueFen}}</p>
+      <span class="stat-note">{{.PaymentPaidCount}} 笔已付款</span>
+    </article>
   </section>
 
   <section class="hero dashboard-hero">
@@ -61,6 +70,7 @@
       <div class="quick-links cols-2">
         <a class="quick-link" href="/admin/accounts">账号管理 <span>创建、启用、停用 →</span></a>
         <a class="quick-link" href="/admin/invites">邀请码管理 <span>创建与核销 →</span></a>
+        <a class="quick-link" href="/admin/orders">支付订单 <span>查询购买人与状态 →</span></a>
         <a class="quick-link" href="/purchase">购买激活码 <span>对外开放 →</span></a>
         <a class="quick-link" href="/register">用户注册页 <span>对外开放 →</span></a>
         <a class="quick-link" href="/renew">用户续费页 <span>对外开放 →</span></a>

@@ -22,6 +22,9 @@
         <div class="public-plan-copy">
           <strong>{{.Name}}</strong>
           <span>{{.DurationDays}} 天{{if .Note}} · {{.Note}}{{end}}</span>
+          <label class="field public-buyer-field">购买人 / 联系方式（可选）
+            <input name="buyer_info" value="{{$.BuyerInfo}}" maxlength="200" placeholder="例如：张三 / 微信号 / 手机号">
+          </label>
         </div>
         <div class="public-plan-action">
           <div class="public-plan-price"><span>价格</span><strong>{{formatMoney .PriceFen}}</strong></div>

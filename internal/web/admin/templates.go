@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"net/url"
 	"sync/atomic"
 	"time"
 
@@ -17,26 +18,41 @@ import (
 var files embed.FS
 
 type ViewData struct {
-	CSRFToken       string
-	Error           string
-	Message         string
-	PlanEdit        PlanEditData
-	Accounts        []sqlite.Account
-	Account         sqlite.Account
-	Invites         []sqlite.InviteCode
-	NewInviteCode   string
-	AccountCount    int
-	ActiveCount     int
-	DisabledCount   int
-	ExpiredCount    int
-	InviteCount     int
-	TimeZone        string
-	TimeZoneNow     string
-	TimeZoneOptions []TimeZoneOption
-	PaymentSettings payments.PaymentSettings
-	ActivationPlans []sqlite.PaymentPlan
-	RenewalPlans    []sqlite.PaymentPlan
-	PaymentOrder    sqlite.PaymentOrder
+	CSRFToken         string
+	Error             string
+	Message           string
+	PlanEdit          PlanEditData
+	Accounts          []sqlite.Account
+	Account           sqlite.Account
+	Invites           []sqlite.InviteCode
+	NewInviteCode     string
+	AccountCount      int
+	ActiveCount       int
+	DisabledCount     int
+	ExpiredCount      int
+	InviteCount       int
+	PaymentOrderCount int
+	PaymentPaidCount  int
+	PaymentRevenueFen int
+	TimeZone          string
+	TimeZoneNow       string
+	TimeZoneOptions   []TimeZoneOption
+	PaymentSettings   payments.PaymentSettings
+	ActivationPlans   []sqlite.PaymentPlan
+	RenewalPlans      []sqlite.PaymentPlan
+	PaymentOrder      sqlite.PaymentOrder
+	PaymentOrders     []sqlite.PaymentOrder
+	OrderTotal        int
+	OrderPaidCount    int
+	OrderPaidFen      int
+	OrderPage         int
+	OrderPageSize     int
+	OrderTotalPages   int
+	OrderQuery        string
+	OrderFilterQuery  string
+	OrderStatus       string
+	OrderKind         string
+	BuyerInfo         string
 }
 
 // PlanEditData contains the editable catalog fields and the original plan metadata.
@@ -131,6 +147,35 @@ func NewTemplates(location *time.Location) (*Templates, error) {
 				return status
 			}
 		},
+		"adminPageLabel": func(active string) string {
+			switch active {
+			case "dashboard":
+				return "工作台"
+			case "accounts":
+				return "账号管理"
+			case "invites":
+				return "邀请码"
+			case "plans":
+				return "售卖方案"
+			case "orders":
+				return "支付订单"
+			case "settings":
+				return "系统设置"
+			default:
+				return active
+			}
+		},
+		"orderBuyer": func(order sqlite.PaymentOrder) string {
+			if order.BuyerInfo != "" {
+				return order.BuyerInfo
+			}
+			if order.AccountUsername != "" {
+				return order.AccountUsername
+			}
+			return "未填写"
+		},
+		"queryEscape": url.QueryEscape,
+		"add":         func(a, b int) int { return a + b },
 		"dict": func(values ...any) (map[string]any, error) {
 			if len(values)%2 != 0 {
 				return nil, fmt.Errorf("dict: odd number of arguments")

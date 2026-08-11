@@ -82,6 +82,37 @@ func TestDeletePaymentPlanProtectsReferencedOrders(t *testing.T) {
 	}
 }
 
+func TestListPaymentOrdersSearchesBuyerAndSummarizes(t *testing.T) {
+	ctx := context.Background()
+	store, err := Open(ctx, t.TempDir()+"/manager.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	now := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
+	plan, err := store.CreatePaymentPlan(ctx, CreatePaymentPlanInput{Kind: "activation", Name: "月卡", DurationDays: 30, DurationMinutes: 30 * 24 * 60, PriceFen: 990}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := store.CreatePaymentOrder(ctx, CreatePaymentOrderInput{PublicToken: "buyer-token-1", MerchantOrderNo: "EUM-BUYER-1", Kind: "activation", PlanID: plan.ID, PlanName: plan.Name, BuyerInfo: "张三 / wx-z3", DurationDays: 30, DurationMinutes: 30 * 24 * 60, AmountFen: 990, Currency: "CNY", ExpiresAt: now.Add(time.Hour), Now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetPaymentOrderState(ctx, first.ID, "paid", "PAID", "", now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CreatePaymentOrder(ctx, CreatePaymentOrderInput{PublicToken: "buyer-token-2", MerchantOrderNo: "EUM-BUYER-2", Kind: "activation", PlanID: plan.ID, PlanName: plan.Name, BuyerInfo: "李四", DurationDays: 30, DurationMinutes: 30 * 24 * 60, AmountFen: 990, Currency: "CNY", ExpiresAt: now.Add(time.Hour), Now: now}); err != nil {
+		t.Fatal(err)
+	}
+	page, err := store.ListPaymentOrders(ctx, PaymentOrderFilter{Query: "张三", Page: 1, PageSize: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Total != 1 || page.PaidCount != 1 || page.PaidAmountFen != 990 || len(page.Orders) != 1 || page.Orders[0].BuyerInfo != "张三 / wx-z3" {
+		t.Fatalf("order page = %+v", page)
+	}
+}
+
 func TestFulfillRenewalPaymentExtendsExpiredAccountAndQueuesAccess(t *testing.T) {
 	ctx := context.Background()
 	store, err := Open(ctx, t.TempDir()+"/manager.db")

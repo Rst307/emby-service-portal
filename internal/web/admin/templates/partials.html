@@ -7,22 +7,51 @@
 {{end}}
 
 {{define "admin-nav"}}
-<header class="topbar">
-  <div class="brand">
+<aside class="admin-sider">
+  <a class="admin-brand" href="/admin/" aria-label="Emby 账号管理工作台">
     <span class="brand-mark" aria-hidden="true">E</span>
-    <span class="brand-copy"><strong>Emby 账号管理</strong><small>ACCESS CONSOLE</small></span>
-  </div>
-  <nav class="nav-links" aria-label="管理导航">
-    <a {{if eq .active "dashboard"}}class="active" aria-current="page" {{end}}href="/admin/">控制台</a>
-    <a {{if eq .active "accounts"}}class="active" aria-current="page" {{end}}href="/admin/accounts">账号</a>
-    <a {{if eq .active "invites"}}class="active" aria-current="page" {{end}}href="/admin/invites">邀请码</a>
-    <a {{if eq .active "plans"}}class="active" aria-current="page" {{end}}href="/admin/plans">售卖方案</a>
-    <a {{if eq .active "settings"}}class="active" aria-current="page" {{end}}href="/admin/settings">设置</a>
+    <span class="brand-copy"><strong>Emby 用户管理</strong><small>PRO CONSOLE</small></span>
+  </a>
+  <nav class="admin-menu" aria-label="管理导航">
+    <p class="menu-group-title">工作台</p>
+    <a class="menu-item {{if eq .active "dashboard"}}active{{end}}" {{if eq .active "dashboard"}}aria-current="page"{{end}} href="/admin/">
+      <span class="menu-icon" aria-hidden="true">⌂</span><span class="menu-label">工作台</span>
+    </a>
+    <p class="menu-group-title">业务管理</p>
+    <a class="menu-item {{if eq .active "accounts"}}active{{end}}" {{if eq .active "accounts"}}aria-current="page"{{end}} href="/admin/accounts">
+      <span class="menu-icon" aria-hidden="true">♙</span><span class="menu-label">账号管理</span>
+    </a>
+    <a class="menu-item {{if eq .active "orders"}}active{{end}}" {{if eq .active "orders"}}aria-current="page"{{end}} href="/admin/orders">
+      <span class="menu-icon" aria-hidden="true">▤</span><span class="menu-label">支付订单</span>
+    </a>
+    <a class="menu-item {{if eq .active "plans"}}active{{end}}" {{if eq .active "plans"}}aria-current="page"{{end}} href="/admin/plans">
+      <span class="menu-icon" aria-hidden="true">◇</span><span class="menu-label">售卖方案</span>
+    </a>
+    <a class="menu-item {{if eq .active "invites"}}active{{end}}" {{if eq .active "invites"}}aria-current="page"{{end}} href="/admin/invites">
+      <span class="menu-icon" aria-hidden="true">⌁</span><span class="menu-label">邀请码</span>
+    </a>
+    <p class="menu-group-title">系统</p>
+    <a class="menu-item {{if eq .active "settings"}}active{{end}}" {{if eq .active "settings"}}aria-current="page"{{end}} href="/admin/settings">
+      <span class="menu-icon" aria-hidden="true">⚙</span><span class="menu-label">系统设置</span>
+    </a>
   </nav>
-  <form class="logout-form" method="post" action="/admin/logout">
-    <input type="hidden" name="csrf_token" value="{{.csrf}}">
-    <button class="secondary" type="submit">退出登录</button>
-  </form>
+  <div class="sider-footer">
+    <span class="online-dot" aria-hidden="true"></span>
+    <span><strong>服务在线</strong><small>Emby User Manager</small></span>
+  </div>
+</aside>
+<header class="admin-header">
+  <div class="admin-breadcrumb" aria-label="当前位置">
+    <a href="/admin/">控制台</a><span aria-hidden="true">/</span><strong>{{adminPageLabel .active}}</strong>
+  </div>
+  <div class="admin-header-actions">
+    <a class="header-link" href="/" target="_blank" rel="noopener">打开用户端 <span aria-hidden="true">↗</span></a>
+    <span class="header-divider" aria-hidden="true"></span>
+    <form class="logout-form" method="post" action="/admin/logout">
+      <input type="hidden" name="csrf_token" value="{{.csrf}}">
+      <button class="header-user" type="submit"><span class="user-avatar" aria-hidden="true">管</span><span>退出登录</span></button>
+    </form>
+  </div>
 </header>
 {{end}}
 

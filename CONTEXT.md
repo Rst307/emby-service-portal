@@ -33,7 +33,7 @@ A paid sale option that extends one identified business account from its current
 _Avoid_: invite code
 
 **支付订单**:
-The local record linking one selected sale option to a payment-center checkout and its idempotent fulfillment. Payment confirmation is separate from whether the activation code or renewal has been delivered.
+The local record linking one selected sale option to a payment-center checkout and its idempotent fulfillment. It also keeps a buyer-information snapshot when the purchaser provides one; for renewal orders the business account username is the buyer reference. Payment confirmation is separate from whether the activation code or renewal has been delivered.
 _Avoid_: payment receipt, invite code
 
 **兑换**:

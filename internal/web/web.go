@@ -102,6 +102,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /admin/invites/{id}/toggle", s.inviteToggle)
 	mux.HandleFunc("POST /admin/invites/{id}/delete", s.inviteDelete)
 	mux.HandleFunc("GET /admin/plans", s.planList)
+	mux.HandleFunc("GET /admin/orders", s.orderList)
 	mux.HandleFunc("POST /admin/plans", s.planCreate)
 	mux.HandleFunc("GET /admin/plans/{id}/edit", s.planEdit)
 	mux.HandleFunc("POST /admin/plans/{id}/update", s.planUpdate)

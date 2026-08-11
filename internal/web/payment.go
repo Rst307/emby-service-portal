@@ -34,8 +34,12 @@ func (s *Server) purchaseCreate(w http.ResponseWriter, r *http.Request) {
 	if err == nil && planID < 1 {
 		err = errors.New("invalid plan")
 	}
+	buyerInfo := strings.TrimSpace(r.Form.Get("buyer_info"))
+	if len(buyerInfo) > 200 {
+		err = errors.New("购买人或联系方式不能超过 200 个字符")
+	}
 	if err == nil {
-		order, createErr := s.payments.CreateActivationOrder(r.Context(), planID)
+		order, createErr := s.payments.CreateActivationOrder(r.Context(), planID, buyerInfo)
 		err = createErr
 		if err == nil {
 			http.Redirect(w, r, "/payment/"+order.PublicToken, http.StatusSeeOther)
@@ -43,7 +47,7 @@ func (s *Server) purchaseCreate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	plans, _ := s.payments.ListPlans(r.Context(), payments.KindActivation, true)
-	s.templates.RenderStatus(w, "purchase", admin.ViewData{CSRFToken: csrfFromRequest(r), Error: "创建支付订单失败：" + err.Error(), ActivationPlans: plans}, http.StatusBadRequest)
+	s.templates.RenderStatus(w, "purchase", admin.ViewData{CSRFToken: csrfFromRequest(r), Error: "创建支付订单失败：" + err.Error(), ActivationPlans: plans, BuyerInfo: buyerInfo}, http.StatusBadRequest)
 }
 
 func (s *Server) renewPaymentCreate(w http.ResponseWriter, r *http.Request) {
