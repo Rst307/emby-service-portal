@@ -3,41 +3,40 @@
 <head>
   {{template "head" "购买激活码 · Emby Service Portal"}}
 </head>
-<body>
-<main class="auth-shell purchase-shell">
-  <section class="auth-card purchase-card">
-    <div class="brand">
-      <span class="brand-mark" aria-hidden="true">E</span>
-      <span class="brand-copy"><strong>Emby Service Portal</strong><small>ACTIVATION DESK</small></span>
-    </div>
-    <p class="eyebrow">购买激活码</p>
-    <h1 class="page-title">选择你的订阅时长</h1>
-    <p class="page-lead">付款成功后会生成一次性激活码，可用于注册 Emby 用户或之后续费。</p>
-    {{if .Error}}<p class="alert error" role="alert">{{.Error}}</p>{{end}}
-    <div class="public-plan-list">
-      {{range .ActivationPlans}}
-      <form method="post" action="/purchase" class="public-plan-card">
-        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-        <input type="hidden" name="plan_id" value="{{.ID}}">
-        <div class="public-plan-copy">
-          <strong>{{.Name}}</strong>
-          <span>{{.DurationDays}} 天{{if .Note}} · {{.Note}}{{end}}</span>
-          <label class="field public-buyer-field">购买人 / 联系方式（可选）
-            <input name="buyer_info" value="{{$.BuyerInfo}}" maxlength="200" placeholder="例如：张三 / 微信号 / 手机号">
-          </label>
-        </div>
-        <div class="public-plan-action">
-          <div class="public-plan-price"><span>价格</span><strong>{{formatMoney .PriceFen}}</strong></div>
-          <button type="submit"><span>立即购买</span><small>进入支付 →</small></button>
-        </div>
-      </form>
-      {{else}}
-      <div class="empty public-empty">管理员尚未上架激活码方案。</div>
-      {{end}}
-    </div>
-    <p class="auth-foot"><a href="/">返回首页</a> · 已有账号？<a href="/renew">购买续费</a> · <a href="/login">登录用户中心</a></p>
-  </section>
-</main>
+<body class="seerr">
+  <div class="seerr-deco" aria-hidden="true"><span class="seerr-deco-blob"></span></div>
+  <div class="seerr-auth">
+    <main class="seerr-auth-card wide">
+      <header class="seerr-brand seerr-rise">
+        <span class="seerr-brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>
+        </span>
+        <span class="seerr-brand-copy"><strong>Emby Service Portal</strong><small>ACTIVATION DESK</small></span>
+      </header>
+      <p class="seerr-eyebrow seerr-rise" style="--d:.05s">购买激活码</p>
+      <h1 class="seerr-title seerr-rise" style="--d:.1s">选择你的订阅时长</h1>
+      <p class="seerr-lead seerr-rise" style="--d:.15s">付款成功后会生成一次性激活码，可用于注册 Emby 用户或之后续费。</p>
+      {{if .Error}}<div class="seerr-alert seerr-rise" style="--d:.2s" role="alert">{{.Error}}</div>{{end}}
+      <div class="seerr-plan-grid">
+        {{range .ActivationPlans}}
+        <form method="post" action="/purchase" class="seerr-plan seerr-rise" style="--d:.22s" data-seerr-submit>
+          <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+          <input type="hidden" name="plan_id" value="{{.ID}}">
+          <div class="seerr-plan-name">{{.Name}}</div>
+          <div class="seerr-plan-meta">{{.DurationDays}} 天{{if .Note}} · {{.Note}}{{end}}</div>
+          <label class="seerr-label seerr-plan-buyer" for="buyer-{{.ID}}">购买人 / 联系方式（可选）</label>
+          <input class="seerr-input seerr-plan-buyer" id="buyer-{{.ID}}" name="buyer_info" value="{{$.BuyerInfo}}" maxlength="200" placeholder="例如：张三 / 微信号 / 手机号">
+          <div class="seerr-plan-price"><span class="amt">{{formatMoney .PriceFen}}</span></div>
+          <button class="seerr-btn seerr-btn-primary" type="submit">立即购买 <span>→</span></button>
+        </form>
+        {{else}}
+        <div class="seerr-panel seerr-rise" style="grid-column:1/-1;text-align:center;color:var(--s-400)">管理员尚未上架激活码方案。</div>
+        {{end}}
+      </div>
+      <footer class="seerr-foot"><a href="/">返回首页</a><span class="sep">·</span>已有账号？<a href="/renew">购买续费</a><span class="sep">·</span><a href="/login">登录用户中心</a></footer>
+    </main>
+  </div>
+  <div class="seerr-progress" data-seerr-progress aria-hidden="true"></div>
 </body>
 </html>
 {{end}}

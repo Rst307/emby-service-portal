@@ -3,33 +3,34 @@
 <head>
   {{template "head" "注册 Emby 账号"}}
 </head>
-<body>
-<main class="auth-shell">
-  <section class="auth-card">
-    <div class="brand">
-      <span class="brand-mark" aria-hidden="true">E</span>
-      <span class="brand-copy"><strong>Emby Service Portal</strong><small>MEMBER ACCESS</small></span>
-    </div>
-    <p class="eyebrow">邀请码注册</p>
-    <h1 class="page-title">创建你的账号</h1>
-    <p class="page-lead">输入有效邀请码后，即可开通 Emby Service Portal。</p>
-    {{if .Error}}<p class="alert error" role="alert">{{.Error}}</p>{{end}}
-    <form method="post" action="/register">
-      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-      <label class="field">邀请码
-        <input name="code" autocomplete="off" placeholder="例如 ESP-..." required>
-      </label>
-      <label class="field">用户名
-        <input name="username" autocomplete="username" placeholder="设置登录用户名" required>
-      </label>
-      <label class="field">密码
-        <input type="password" name="password" autocomplete="new-password" minlength="8" placeholder="至少 8 位" required>
-      </label>
-      <button class="btn-block" type="submit">立即注册</button>
-    </form>
-    <p class="auth-foot">已有账号？ <a href="/login">登录用户中心</a> · <a href="/purchase">购买激活码</a> · <a href="/renew">账号续费</a></p>
-  </section>
-</main>
+<body class="seerr">
+  <div class="seerr-deco" aria-hidden="true"><span class="seerr-deco-blob"></span></div>
+  <div class="seerr-auth">
+    <main class="seerr-auth-card">
+      <header class="seerr-brand seerr-rise">
+        <span class="seerr-brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>
+        </span>
+        <span class="seerr-brand-copy"><strong>Emby Service Portal</strong><small>MEMBER ACCESS</small></span>
+      </header>
+      <p class="seerr-eyebrow seerr-rise" style="--d:.05s">邀请码注册</p>
+      <h1 class="seerr-title seerr-rise" style="--d:.1s">创建你的账号</h1>
+      <p class="seerr-lead seerr-rise" style="--d:.15s">输入有效邀请码后，即可开通 Emby Service Portal。</p>
+      {{if .Error}}<div class="seerr-alert seerr-rise" style="--d:.2s" role="alert">{{.Error}}</div>{{end}}
+      <form method="post" action="/register" data-seerr-submit>
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <label class="seerr-label" for="reg-code">邀请码</label>
+        <input class="seerr-input" id="reg-code" name="code" autocomplete="off" placeholder="例如 ESP-..." required>
+        <label class="seerr-label" for="reg-username">用户名</label>
+        <input class="seerr-input" id="reg-username" name="username" autocomplete="username" placeholder="设置登录用户名" required>
+        <label class="seerr-label" for="reg-password">密码</label>
+        <input class="seerr-input" id="reg-password" type="password" name="password" autocomplete="new-password" minlength="8" placeholder="至少 8 位" required>
+        <button class="seerr-btn seerr-btn-primary seerr-btn-block" type="submit">立即注册</button>
+      </form>
+      <footer class="seerr-foot">已有账号？<a href="/login">登录用户中心</a><span class="sep">·</span><a href="/purchase">购买激活码</a><span class="sep">·</span><a href="/renew">账号续费</a></footer>
+    </main>
+  </div>
+  <div class="seerr-progress" data-seerr-progress aria-hidden="true"></div>
 </body>
 </html>
 {{end}}
@@ -39,69 +40,64 @@
 <head>
   {{template "head" "Emby 账号续费"}}
 </head>
-<body>
-<main class="auth-shell">
-  <section class="auth-card">
-    <div class="brand">
-      <span class="brand-mark" aria-hidden="true">E</span>
-      <span class="brand-copy"><strong>Emby Service Portal</strong><small>MEMBER ACCESS</small></span>
-    </div>
-    <p class="eyebrow">邀请码续费</p>
-    <h1 class="page-title">延长订阅时间</h1>
-    <p class="page-lead">选择付费续费方案，或使用已有邀请码；续费时长都会从当前到期时间继续累加。{{if .Account.ID}}当前登录账号无需再次输入用户名和密码。{{end}}</p>
-    {{if .Error}}<p class="alert error" role="alert">{{.Error}}</p>{{end}}
-    {{if .RenewalPlans}}
-    <div class="public-plan-list renewal-plan-list">
-      {{range .RenewalPlans}}
-      <form method="post" action="/renew/payment" class="public-plan-card{{if $.Account.ID}} portal-renewal-card{{end}}">
-        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
-        <input type="hidden" name="plan_id" value="{{.ID}}">
-        <div class="public-plan-copy">
-          <strong>{{.Name}}</strong>
-          <span>{{.DurationDays}} 天{{if .Note}} · {{.Note}}{{end}}</span>
-          {{if $.Account.ID}}<span class="portal-plan-account">当前账号：{{$.Account.Username}}</span>{{end}}
-        </div>
-        <div class="public-plan-action">
-          <div class="public-plan-price"><span>价格</span><strong>{{formatMoney .PriceFen}}</strong></div>
-          <button type="submit"><span>去支付</span><small>{{if $.Account.ID}}为当前账号续费 →{{else}}先验证账号 →{{end}}</small></button>
-        </div>
-        {{if not $.Account.ID}}
-        <label class="field plan-account-field">用户名
-          <input name="username" autocomplete="username" placeholder="用于绑定续费账号" required>
-        </label>
-        <label class="field plan-account-field">账号密码
-          <input name="password" type="password" autocomplete="current-password" placeholder="付款前验证账号归属" required>
-        </label>
+<body class="seerr">
+  <div class="seerr-deco" aria-hidden="true"><span class="seerr-deco-blob"></span></div>
+  <div class="seerr-auth">
+    <main class="seerr-auth-card wide">
+      <header class="seerr-brand seerr-rise">
+        <span class="seerr-brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>
+        </span>
+        <span class="seerr-brand-copy"><strong>Emby Service Portal</strong><small>MEMBER ACCESS</small></span>
+      </header>
+      <p class="seerr-eyebrow seerr-rise" style="--d:.05s">邀请码续费</p>
+      <h1 class="seerr-title seerr-rise" style="--d:.1s">延长订阅时间</h1>
+      <p class="seerr-lead seerr-rise" style="--d:.15s">选择付费续费方案，或使用已有邀请码；续费时长都会从当前到期时间继续累加。{{if .Account.ID}}当前登录账号无需再次输入用户名和密码。{{end}}</p>
+      {{if .Error}}<div class="seerr-alert seerr-rise" style="--d:.2s" role="alert">{{.Error}}</div>{{end}}
+      {{if .RenewalPlans}}
+      <div class="seerr-plan-grid seerr-rise" style="--d:.22s">
+        {{range .RenewalPlans}}
+        <form method="post" action="/renew/payment" class="seerr-plan" data-seerr-submit>
+          <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+          <input type="hidden" name="plan_id" value="{{.ID}}">
+          <div class="seerr-plan-name">{{.Name}}</div>
+          <div class="seerr-plan-meta">{{.DurationDays}} 天{{if .Note}} · {{.Note}}{{end}}</div>
+          {{if $.Account.ID}}<div class="seerr-plan-meta">当前账号：{{$.Account.Username}}</div>{{end}}
+          {{if not $.Account.ID}}
+          <label class="seerr-label seerr-plan-buyer" for="renew-user-{{.ID}}">用户名</label>
+          <input class="seerr-input seerr-plan-buyer" id="renew-user-{{.ID}}" name="username" autocomplete="username" placeholder="用于绑定续费账号" required>
+          <label class="seerr-label seerr-plan-buyer" for="renew-pass-{{.ID}}">账号密码</label>
+          <input class="seerr-input seerr-plan-buyer" id="renew-pass-{{.ID}}" name="password" type="password" autocomplete="current-password" placeholder="付款前验证账号归属" required>
+          {{end}}
+          <div class="seerr-plan-price"><span class="amt">{{formatMoney .PriceFen}}</span></div>
+          <button class="seerr-btn seerr-btn-primary" type="submit">去支付 {{if $.Account.ID}}为当前账号续费 →{{else}}先验证账号 →{{end}}</button>
+        </form>
         {{end}}
-      </form>
-      {{end}}
-    </div>
-    <div class="renewal-divider"><span>或使用已有邀请码</span></div>
-    {{end}}
-    <form method="post" action="/renew">
-      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-      <label class="field">邀请码
-        <input name="code" autocomplete="off" placeholder="例如 ESP-..." required>
-      </label>
-      {{if .Account.ID}}
-      <div class="portal-renewal-account">
-        <span>当前登录账号</span>
-        <strong>{{.Account.Username}}</strong>
-        <small>无需再次输入用户名和密码</small>
       </div>
-      {{else}}
-      <label class="field">用户名
-        <input name="username" autocomplete="username" placeholder="请输入 Emby 用户名" required>
-      </label>
-      <label class="field">账号密码
-        <input type="password" name="password" autocomplete="current-password" placeholder="验证账号归属" required>
-      </label>
+      <div class="seerr-divider seerr-rise" style="--d:.28s"><span>或使用已有邀请码</span></div>
       {{end}}
-      <button class="btn-block" type="submit">确认续费</button>
-    </form>
-    <p class="auth-foot"><a href="/login">登录用户中心</a> · 还没有账号？ <a href="/register">使用邀请码注册</a></p>
-  </section>
-</main>
+      <form method="post" action="/renew" data-seerr-submit class="seerr-rise" style="--d:.32s">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <label class="seerr-label" for="renew-code">邀请码</label>
+        <input class="seerr-input" id="renew-code" name="code" autocomplete="off" placeholder="例如 ESP-..." required>
+        {{if .Account.ID}}
+        <div class="seerr-panel" style="margin:.4rem 0 1.1rem;padding:.95rem 1.1rem">
+          <div class="seerr-plan-meta">当前登录账号</div>
+          <div class="seerr-plan-name">{{.Account.Username}}</div>
+          <div class="seerr-plan-meta">无需再次输入用户名和密码</div>
+        </div>
+        {{else}}
+        <label class="seerr-label" for="renew-username">用户名</label>
+        <input class="seerr-input" id="renew-username" name="username" autocomplete="username" placeholder="请输入 Emby 用户名" required>
+        <label class="seerr-label" for="renew-password">账号密码</label>
+        <input class="seerr-input" id="renew-password" type="password" name="password" autocomplete="current-password" placeholder="验证账号归属" required>
+        {{end}}
+        <button class="seerr-btn seerr-btn-primary seerr-btn-block" type="submit">确认续费</button>
+      </form>
+      <footer class="seerr-foot"><a href="/login">登录用户中心</a><span class="sep">·</span>还没有账号？<a href="/register">使用邀请码注册</a></footer>
+    </main>
+  </div>
+  <div class="seerr-progress" data-seerr-progress aria-hidden="true"></div>
 </body>
 </html>
 {{end}}
@@ -111,16 +107,20 @@
 <head>
   {{template "head" "操作成功"}}
 </head>
-<body>
-<main class="auth-shell">
-  <section class="auth-card result-card">
-    <div class="result-icon">✓</div>
-    <p class="eyebrow">操作成功</p>
-    <h1 class="page-title">已完成</h1>
-    <p class="page-lead">{{.Message}}</p>
-    <p class="auth-foot"><a href="/">返回首页</a> · <a href="/purchase">购买激活码</a> · <a href="/register">注册账号</a> · <a href="/renew">账号续费</a></p>
-  </section>
-</main>
+<body class="seerr">
+  <div class="seerr-deco" aria-hidden="true"><span class="seerr-deco-blob"></span></div>
+  <div class="seerr-auth">
+    <main class="seerr-auth-card seerr-result-card">
+      <div class="seerr-result-icon seerr-rise" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 10 17.5 19 7"/></svg>
+      </div>
+      <p class="seerr-eyebrow seerr-rise" style="--d:.1s">操作成功</p>
+      <h1 class="seerr-title seerr-rise" style="--d:.15s">已完成</h1>
+      <p class="seerr-lead seerr-rise" style="--d:.2s">{{.Message}}</p>
+      <footer class="seerr-foot seerr-rise" style="--d:.26s"><a href="/">返回首页</a><span class="sep">·</span><a href="/purchase">购买激活码</a><span class="sep">·</span><a href="/register">注册账号</a><span class="sep">·</span><a href="/renew">账号续费</a></footer>
+    </main>
+  </div>
+  <div class="seerr-progress" data-seerr-progress aria-hidden="true"></div>
 </body>
 </html>
 {{end}}

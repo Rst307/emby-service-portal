@@ -243,7 +243,7 @@ document.addEventListener("submit", (event) => {
     const fulfillmentStatus = payload.fulfillment_status || "pending";
     if (state) {
       state.textContent = labels[paymentStatus] || paymentStatus;
-      state.className = "badge payment-status-" + paymentStatus;
+      state.className = "seerr-badge payment-status-" + paymentStatus;
     }
     if (hint) {
       hint.textContent = paymentStatus === "pending" ? "请打开微信收银台完成付款。" :
@@ -298,4 +298,61 @@ document.addEventListener("submit", (event) => {
     if (!completed) poll();
     else window.clearInterval(interval);
   }, 2500);
+})();
+
+/* ============================================================
+   Seerr 风格交互（公开页 + 用户中心）
+   ============================================================ */
+
+/* --- 顶栏滚动毛玻璃（seerr Layout 风格） --- */
+
+(() => {
+  const topbar = document.querySelector("[data-seerr-topbar]");
+  if (!topbar) return;
+  const update = () => topbar.classList.toggle("scrolled", window.scrollY > 20);
+  update();
+  window.addEventListener("scroll", update, { passive: true });
+})();
+
+/* --- 滚动入场动画（.reveal） --- */
+
+(() => {
+  const elements = document.querySelectorAll(".reveal");
+  if (!elements.length) return;
+  if ("IntersectionObserver" in window) {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("visible");
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.12, rootMargin: "0px 0px -32px 0px" }
+    );
+    elements.forEach((element) => observer.observe(element));
+  } else {
+    elements.forEach((element) => element.classList.add("visible"));
+  }
+})();
+
+/* --- 顶部加载进度条（nprogress 风格） --- */
+
+(() => {
+  const progress = document.querySelector("[data-seerr-progress]");
+  if (!progress) return;
+  const fire = () => {
+    progress.classList.remove("active");
+    void progress.offsetWidth; // 强制重排以重新触发动画
+    progress.classList.add("active");
+  };
+  if (document.readyState === "complete") {
+    window.setTimeout(fire, 180);
+  } else {
+    window.addEventListener("load", () => window.setTimeout(fire, 180));
+  }
+  document.addEventListener("submit", (event) => {
+    if (event.target.matches("[data-seerr-submit]")) fire();
+  });
 })();

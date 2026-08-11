@@ -3,30 +3,32 @@
 <head>
   {{template "head" "用户中心 · Emby Service Portal"}}
 </head>
-<body>
-<main class="auth-shell">
-  <section class="auth-card">
-    <div class="brand">
-      <span class="brand-mark" aria-hidden="true">E</span>
-      <span class="brand-copy"><strong>Emby Service Portal</strong><small>MEMBER ACCESS</small></span>
-    </div>
-    <p class="eyebrow">用户中心</p>
-    <h1 class="page-title">查看你的订阅</h1>
-    <p class="page-lead">使用你的 Emby 用户名和密码登录；密码不会被保存。</p>
-    {{if .Error}}<p class="alert error" role="alert">{{.Error}}</p>{{end}}
-    <form method="post" action="/portal/login">
-      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-      <label class="field">用户名
-        <input name="username" autocomplete="username" required autofocus>
-      </label>
-      <label class="field">Emby 密码
-        <input type="password" name="password" autocomplete="current-password" required>
-      </label>
-      <button class="btn-block" type="submit">登录用户中心</button>
-    </form>
-    <p class="auth-foot"><a href="/purchase">购买激活码</a> · <a href="/register">注册账号</a> · <a href="/renew">账号续费</a></p>
-  </section>
-</main>
+<body class="seerr">
+  <div class="seerr-deco" aria-hidden="true"><span class="seerr-deco-blob"></span></div>
+  <div class="seerr-auth">
+    <main class="seerr-auth-card">
+      <header class="seerr-brand seerr-rise">
+        <span class="seerr-brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>
+        </span>
+        <span class="seerr-brand-copy"><strong>Emby Service Portal</strong><small>MEMBER ACCESS</small></span>
+      </header>
+      <p class="seerr-eyebrow seerr-rise" style="--d:.05s">用户中心</p>
+      <h1 class="seerr-title seerr-rise" style="--d:.1s">查看你的订阅</h1>
+      <p class="seerr-lead seerr-rise" style="--d:.15s">使用你的 Emby 用户名和密码登录；密码不会被保存。</p>
+      {{if .Error}}<div class="seerr-alert seerr-rise" style="--d:.2s" role="alert">{{.Error}}</div>{{end}}
+      <form method="post" action="/portal/login" data-seerr-submit>
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <label class="seerr-label" for="pl-username">用户名</label>
+        <input class="seerr-input" id="pl-username" name="username" autocomplete="username" required autofocus>
+        <label class="seerr-label" for="pl-password">Emby 密码</label>
+        <input class="seerr-input" id="pl-password" type="password" name="password" autocomplete="current-password" required>
+        <button class="seerr-btn seerr-btn-primary seerr-btn-block" type="submit">登录用户中心</button>
+      </form>
+      <footer class="seerr-foot"><a href="/purchase">购买激活码</a><span class="sep">·</span><a href="/register">注册账号</a><span class="sep">·</span><a href="/renew">账号续费</a></footer>
+    </main>
+  </div>
+  <div class="seerr-progress" data-seerr-progress aria-hidden="true"></div>
 </body>
 </html>
 {{end}}
@@ -36,64 +38,68 @@
 <head>
   {{template "head" "用户中心 · Emby Service Portal"}}
 </head>
-<body>
-<main class="app-shell">
-  <header class="topbar">
-    <div class="brand">
-      <span class="brand-mark" aria-hidden="true">E</span>
-      <span class="brand-copy"><strong>Emby Service Portal</strong><small>MEMBER ACCESS</small></span>
-    </div>
-    <nav class="nav-links" aria-label="用户中心导航">
+<body class="seerr">
+  <div class="seerr-deco" aria-hidden="true"><span class="seerr-deco-blob"></span></div>
+  <header class="seerr-topbar" data-seerr-topbar>
+    <a class="seerr-brand" href="/portal/" aria-label="Emby Service Portal 用户中心">
+      <span class="seerr-brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>
+      </span>
+      <span class="seerr-brand-copy"><strong>Emby Service Portal</strong><small>MEMBER ACCESS</small></span>
+    </a>
+    <nav class="seerr-nav" aria-label="用户中心导航">
       <a class="active" aria-current="page" href="/portal/">我的订阅</a>
-      <a href="/purchase">购买激活码</a>
-      <a href="/renew">续费订阅</a>
+      <a href="/purchase"><span class="label-full">购买激活码</span><span>购买</span></a>
+      <a href="/renew"><span class="label-full">续费订阅</span><span>续费</span></a>
     </nav>
-    <form class="logout-form" method="post" action="/portal/logout">
+    <form method="post" action="/portal/logout">
       <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-      <button class="secondary" type="submit">退出登录</button>
+      <button class="seerr-btn seerr-btn-ghost" type="submit" style="padding:.42rem .9rem">退出登录</button>
     </form>
   </header>
 
-  <section class="page-heading">
-    <div>
-      <p class="eyebrow">你好，{{.Account.Username}}</p>
-      <h1 class="page-title">我的订阅</h1>
-      <p class="page-lead">以下为当前业务账号的服务状态。</p>
-    </div>
-    <span class="badge {{.Account.Status}}">{{statusLabel .Account.Status}}</span>
-  </section>
-
-  <section class="hero">
-    <article class="panel hero-card">
-      <p class="eyebrow">订阅到期时间</p>
-      <p class="expiry-value">{{formatTime .Account.ExpiresAt "2006-01-02 15:04"}}</p>
-      <p class="page-lead">时间以 {{timeZone}} 显示。到期后系统将自动禁用登录。</p>
-      <p><a class="quick-link" href="/renew">续费订阅 <span>邀请码或在线购买 →</span></a></p>
-    </article>
-    <aside class="panel hero-card">
-      <h2>账号信息</h2>
-      <p class="page-lead">用户名：<strong>{{.Account.Username}}</strong></p>
-      {{if .Account.Note}}<p class="page-lead">备注：{{.Account.Note}}</p>{{end}}
-      <p class="subtle">为保护账号安全，用户中心不会显示或导出密码。</p>
-    </aside>
-  </section>
-
-  <section class="panel portal-action-panel" aria-labelledby="portal-actions-title">
-    <header class="panel-header">
+  <main class="seerr-main">
+    <section class="seerr-page-head seerr-rise">
       <div>
-        <p class="section-kicker">MEMBER OPTIONS</p>
-        <h2 class="panel-title" id="portal-actions-title">需要办理什么？</h2>
-        <p class="panel-copy">从这里直接进入购买激活码或续费订阅。</p>
+        <p class="seerr-eyebrow">你好，{{.Account.Username}}</p>
+        <h1 class="seerr-title" style="margin-bottom:0">我的订阅</h1>
+        <p class="seerr-lead" style="margin-bottom:0">以下为当前业务账号的服务状态。</p>
       </div>
-    </header>
-    <div class="panel-body">
-      <div class="quick-links cols-2">
-        <a class="quick-link" href="/purchase">购买激活码 <span>付款后获得一次性激活码 →</span></a>
-        <a class="quick-link" href="/renew">续费订阅 <span>使用邀请码或选择方案 →</span></a>
+      <span class="seerr-badge {{.Account.Status}}">{{statusLabel .Account.Status}}</span>
+    </section>
+
+    <section class="seerr-hero-grid">
+      <article class="seerr-panel reveal">
+        <p class="seerr-eyebrow">订阅到期时间</p>
+        <p class="seerr-expiry seerr-brand-text">{{formatTime .Account.ExpiresAt "2006-01-02 15:04"}}</p>
+        <p class="seerr-panel-copy">时间以 {{timeZone}} 显示。到期后系统将自动禁用登录。</p>
+        <div class="seerr-link-row">
+          <a class="seerr-btn seerr-btn-primary" href="/renew">续费订阅</a>
+          <a class="seerr-btn seerr-btn-ghost" href="/purchase">购买激活码</a>
+        </div>
+      </article>
+      <aside class="seerr-panel reveal" style="--d:.08s">
+        <p class="seerr-eyebrow">账号信息</p>
+        <dl class="seerr-key-value" style="margin-top:.8rem">
+          <div class="kv"><dt>用户名</dt><dd>{{.Account.Username}}</dd></div>
+          {{if .Account.Note}}<div class="kv"><dt>备注</dt><dd>{{.Account.Note}}</dd></div>{{end}}
+          <div class="kv"><dt>状态</dt><dd>{{statusLabel .Account.Status}}</dd></div>
+        </dl>
+        <p class="seerr-panel-copy" style="margin-top:1rem;font-size:.78rem">为保护账号安全，用户中心不会显示或导出密码。</p>
+      </aside>
+    </section>
+
+    <section class="seerr-panel reveal" style="--d:.14s">
+      <p class="seerr-eyebrow">MEMBER OPTIONS</p>
+      <h2 class="seerr-panel-title">需要办理什么？</h2>
+      <p class="seerr-panel-copy">从这里直接进入购买激活码或续费订阅。</p>
+      <div class="seerr-link-row">
+        <a class="seerr-btn seerr-btn-ghost" href="/purchase">购买激活码 →</a>
+        <a class="seerr-btn seerr-btn-ghost" href="/renew">续费订阅 →</a>
       </div>
-    </div>
-  </section>
-</main>
+    </section>
+  </main>
+  <div class="seerr-progress" data-seerr-progress aria-hidden="true"></div>
 </body>
 </html>
 {{end}}

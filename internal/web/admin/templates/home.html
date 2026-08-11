@@ -3,25 +3,63 @@
 <head>
   {{template "head" "Emby Service Portal"}}
 </head>
-<body>
-<main class="auth-shell">
-  <section class="auth-card">
-    <div class="brand">
-      <span class="brand-mark" aria-hidden="true">E</span>
-      <span class="brand-copy"><strong>Emby Service Portal</strong><small>MEMBER ACCESS</small></span>
-    </div>
-    <p class="eyebrow">账户服务中心</p>
-    <h1 class="page-title">欢迎使用</h1>
-    <p class="page-lead">登录用户中心查看订阅状态，或使用邀请码注册、续费。</p>
-    <div class="auth-actions">
-      <a class="quick-link" href="/login">用户登录 <span>查看我的订阅 →</span></a>
-      <a class="quick-link" href="/purchase">购买激活码 <span>选择订阅时长 →</span></a>
-      <a class="quick-link" href="/register">邀请码注册 <span>创建 Emby 账号 →</span></a>
-      <a class="quick-link" href="/renew">账号续费 <span>购买方案或使用邀请码 →</span></a>
-    </div>
-    <p class="auth-foot"><a href="/admin/login">管理员登录</a></p>
-  </section>
-</main>
+<body class="seerr">
+  <div class="seerr-deco" aria-hidden="true"><span class="seerr-deco-blob"></span></div>
+  <div class="seerr-auth">
+    <main class="seerr-auth-card" style="width:min(46rem,100%)">
+      <header class="seerr-brand seerr-rise">
+        <span class="seerr-brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>
+        </span>
+        <span class="seerr-brand-copy"><strong>Emby Service Portal</strong><small>MEMBER ACCESS</small></span>
+      </header>
+      <p class="seerr-eyebrow seerr-rise" style="--d:.05s">账户服务中心</p>
+      <h1 class="seerr-title seerr-rise" style="--d:.1s">欢迎使用 <span class="seerr-brand-text">Emby Service Portal</span></h1>
+      <p class="seerr-lead seerr-rise" style="--d:.15s">登录用户中心查看订阅状态，或使用邀请码注册、续费、购买激活码。</p>
+
+      <div class="seerr-entry-grid">
+        <a class="seerr-entry seerr-rise" style="--d:.2s" href="/login">
+          <span class="seerr-entry-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.6"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>
+          </span>
+          <span class="seerr-entry-copy"><strong>用户登录</strong><small>查看我的订阅状态</small></span>
+          <span class="seerr-entry-arrow" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
+          </span>
+        </a>
+        <a class="seerr-entry seerr-rise" style="--d:.26s" href="/purchase">
+          <span class="seerr-entry-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16l-1.5 12.2a2 2 0 0 1-2 1.8H7.5a2 2 0 0 1-2-1.8L4 7Z"/><path d="M8.5 9.5V6a3.5 3.5 0 0 1 7 0v3.5"/></svg>
+          </span>
+          <span class="seerr-entry-copy"><strong>购买激活码</strong><small>选择订阅时长</small></span>
+          <span class="seerr-entry-arrow" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
+          </span>
+        </a>
+        <a class="seerr-entry seerr-rise" style="--d:.32s" href="/register">
+          <span class="seerr-entry-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v13a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18.5v-13Z"/><path d="M4 9h16M9 13h6"/></svg>
+          </span>
+          <span class="seerr-entry-copy"><strong>邀请码注册</strong><small>创建 Emby 账号</small></span>
+          <span class="seerr-entry-arrow" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
+          </span>
+        </a>
+        <a class="seerr-entry seerr-rise" style="--d:.38s" href="/renew">
+          <span class="seerr-entry-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
+          </span>
+          <span class="seerr-entry-copy"><strong>账号续费</strong><small>方案购买或邀请码</small></span>
+          <span class="seerr-entry-arrow" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
+          </span>
+        </a>
+      </div>
+
+      <footer class="seerr-foot seerr-rise" style="--d:.44s"><a href="/admin/login">管理员登录</a></footer>
+    </main>
+  </div>
+  <div class="seerr-progress" data-seerr-progress aria-hidden="true"></div>
 </body>
 </html>
 {{end}}

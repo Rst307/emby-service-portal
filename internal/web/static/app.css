@@ -1272,3 +1272,728 @@ dialog form { padding: 24px; }
 .admin-auth-body .danger-card::before { background: #ff4d4f; }
 .admin-auth-body .danger-eyebrow { color: #cf1322; }
 .admin-auth-body .danger-card button.danger { background: #ff4d4f; color: #ffffff; }
+
+/* ============================================================
+   Seerr 风格主题（公开页 + 用户中心）· 作用域 .seerr
+   移植自 github.com/seerr-team/seerr 设计系统：
+   深色灰阶分层 + Indigo/Purple 品牌渐变 + 毛玻璃顶栏
+   ============================================================ */
+
+body.seerr {
+  --s-950: #030712;
+  --s-900: #111827;
+  --s-850: #161f31;
+  --s-800: #1f2937;
+  --s-750: #2b3648;
+  --s-700: #374151;
+  --s-600: #4b5563;
+  --s-500: #6b7280;
+  --s-400: #9ca3af;
+  --s-300: #d1d5db;
+  --s-200: #e5e7eb;
+  --s-100: #f3f4f6;
+  --s-indigo-700: #4338ca;
+  --s-indigo-600: #4f46e5;
+  --s-indigo-500: #6366f1;
+  --s-indigo-400: #818cf8;
+  --s-indigo-300: #a5b4fc;
+  --s-purple-500: #a855f7;
+  --s-purple-400: #c084fc;
+  --s-green-500: #10b981;
+  --s-green-400: #34d399;
+  --s-red-500: #ef4444;
+  --s-red-400: #f87171;
+  --s-yellow-400: #fbbf24;
+  --s-radius: 10px;
+  --s-radius-sm: 7px;
+  margin: 0;
+  min-height: 100vh;
+  background-color: var(--s-900);
+  background-image: none;
+  color: var(--s-200);
+  font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body.seerr ::selection { background: rgba(99, 102, 241, 0.4); color: #fff; }
+
+/* seerr 风格滚动条 */
+body.seerr { scrollbar-width: thin; scrollbar-color: #4b5563 #1f2937; }
+body.seerr:hover { scrollbar-color: #6b7280 #1f2937; }
+body.seerr::-webkit-scrollbar { width: 10px; }
+body.seerr::-webkit-scrollbar-track { background: #1f2937; }
+body.seerr::-webkit-scrollbar-thumb { background-color: #4b5563; }
+body.seerr:hover::-webkit-scrollbar-thumb { background-color: #6b7280; }
+
+/* ---------- MoviePilot 风格环境光背景层 ----------
+   三层低频光晕缓慢漂移（ambient-drift），营造影视画面般的动态背景。 */
+
+.seerr-deco {
+  position: fixed;
+  inset: 0;
+  background: var(--s-950);
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+/* 主光：indigo 大椭圆，自左上向右下漂移（18s 一个来回） */
+.seerr-deco::before {
+  content: "";
+  position: absolute;
+  inset: -12%;
+  background:
+    radial-gradient(ellipse at 78% 18%, rgba(99, 102, 241, 0.20), transparent 48%),
+    linear-gradient(145deg, transparent 28%, rgba(99, 102, 241, 0.08) 72%, transparent);
+  filter: blur(40px);
+  transform: translate3d(1.5%, -1%, 0) scale(1.04);
+  animation: seerr-ambient-drift 18s ease-in-out infinite alternate;
+}
+/* 辅光：violet，自右下向左上反向漂移（24s） */
+.seerr-deco::after {
+  content: "";
+  position: absolute;
+  inset: -12%;
+  background:
+    radial-gradient(ellipse at 22% 82%, rgba(168, 85, 247, 0.16), transparent 50%),
+    linear-gradient(215deg, transparent 30%, rgba(168, 85, 247, 0.06) 70%, transparent);
+  filter: blur(40px);
+  transform: translate3d(-1.2%, 0.8%, 0) scale(1.05);
+  animation: seerr-ambient-drift 24s ease-in-out infinite alternate-reverse;
+}
+/* 第三层：青色微光，长时间缓慢呼吸（30s） */
+.seerr-deco .seerr-deco-blob {
+  position: absolute;
+  width: 42rem; height: 30rem;
+  left: 12%; top: -6rem;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(34, 211, 238, 0.07), transparent 70%);
+  filter: blur(48px);
+  transform: translate3d(0, 1%, 0) scale(1.03);
+  animation: seerr-ambient-drift 30s ease-in-out infinite alternate-reverse;
+}
+
+@keyframes seerr-ambient-drift {
+  to { transform: translate3d(-1.5%, 1%, 0) scale(1); }
+}
+
+/* ---------- 认证页布局（登录 / 注册 / 购买 / 支付） ---------- */
+
+.seerr-auth {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 5rem 1.25rem 3rem;
+}
+
+.seerr-auth-card {
+  position: relative;
+  overflow: hidden;
+  width: min(30rem, 100%);
+  padding: 2.25rem 2.25rem 1.75rem;
+  background: rgba(24, 33, 48, 0.62);
+  border: 1px solid rgba(75, 85, 99, 0.4);
+  border-radius: 18px;
+  box-shadow: 0 20px 54px rgba(2, 6, 18, 0.45);
+  backdrop-filter: blur(22px) saturate(118%);
+  -webkit-backdrop-filter: blur(22px) saturate(118%);
+  animation: seerr-card-enter 600ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+/* 顶部迎光棱镜：单方向顶部高光细线（MoviePilot 玻璃卡） */
+.seerr-auth-card::before {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  top: 0; left: 13%; right: 38%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.42) 32%, rgba(255, 255, 255, 0.7) 50%, transparent);
+  opacity: 0.34;
+  pointer-events: none;
+}
+/* 折射高光：表面斜向微光，替代原版未启用的 SVG 玻璃滤镜 */
+.seerr-auth-card::after {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.05), transparent 34%),
+    radial-gradient(180px 150px at 50% 0%, rgba(255, 255, 255, 0.035), rgba(99, 102, 241, 0.02) 44%, transparent 76%);
+  pointer-events: none;
+}
+
+@keyframes seerr-card-enter {
+  0% { opacity: 0; transform: translateY(12px) scale(0.985); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.seerr-auth-card.wide { width: min(44rem, 100%); }
+
+/* ---------- 品牌区 ---------- */
+
+.seerr-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.9rem;
+}
+.seerr-brand-mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 2.5rem; height: 2.5rem;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--s-indigo-500), var(--s-purple-500));
+  box-shadow: 0 10px 26px rgba(99, 102, 241, 0.35);
+}
+.seerr-brand-mark svg { width: 1.35rem; height: 1.35rem; }
+.seerr-brand-copy { display: flex; flex-direction: column; line-height: 1.2; }
+.seerr-brand-copy strong { font-size: 0.98rem; font-weight: 700; letter-spacing: 0.01em; color: var(--s-100); }
+.seerr-brand-copy small {
+  margin-top: 0.22rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  color: var(--s-500);
+}
+
+/* 渐变品牌文字（模仿 seerr 的 .text-overseerr） */
+.seerr-brand-text {
+  background: linear-gradient(135deg, var(--s-indigo-400), var(--s-purple-400));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ---------- 排版 ---------- */
+
+.seerr-eyebrow {
+  margin: 0 0 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--s-indigo-400);
+}
+.seerr-title {
+  margin: 0 0 0.6rem;
+  font-size: 1.7rem;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  color: var(--s-100);
+}
+.seerr-lead {
+  margin: 0 0 1.6rem;
+  font-size: 0.92rem;
+  line-height: 1.65;
+  color: var(--s-400);
+}
+.seerr-lead strong { color: var(--s-200); font-weight: 600; }
+
+/* ---------- 表单 ---------- */
+
+.seerr-label {
+  display: block;
+  margin: 0 0 0.35rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--s-400);
+}
+.seerr-input {
+  display: block;
+  width: 100%;
+  min-height: 2.6rem;
+  padding: 0.55rem 0.8rem;
+  margin-bottom: 1.1rem;
+  background-color: var(--s-700);
+  border: 1px solid var(--s-600);
+  border-radius: var(--s-radius-sm);
+  color: var(--s-100);
+  font: inherit;
+  font-size: 0.92rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+.seerr-input::placeholder { color: var(--s-500); }
+.seerr-input:hover { border-color: var(--s-500); }
+.seerr-input:focus {
+  outline: none;
+  border-color: var(--s-indigo-500);
+  background-color: var(--s-750);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.22);
+}
+.seerr-field { margin-bottom: 0.4rem; }
+
+/* ---------- 按钮 ---------- */
+
+.seerr-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.62rem 1.15rem;
+  border-radius: var(--s-radius-sm);
+  border: 1px solid var(--s-600);
+  background-color: var(--s-700);
+  color: var(--s-100);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+.seerr-btn:hover { background-color: var(--s-600); border-color: var(--s-500); }
+.seerr-btn:active { transform: translateY(1px); }
+.seerr-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.seerr-btn-primary {
+  background-color: var(--s-indigo-600);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 8px 22px rgba(79, 70, 229, 0.32);
+}
+.seerr-btn-primary:hover { background-color: var(--s-indigo-500); border-color: transparent; }
+.seerr-btn-primary:active { background-color: var(--s-indigo-700); }
+
+.seerr-btn-ghost {
+  background-color: transparent;
+  border-color: var(--s-600);
+  color: var(--s-300);
+}
+.seerr-btn-ghost:hover { background-color: rgba(107, 114, 128, 0.16); border-color: var(--s-500); color: #fff; }
+
+.seerr-btn-block { display: flex; width: 100%; margin-top: 0.9rem; }
+
+/* ---------- 徽章 ---------- */
+
+.seerr-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.22rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--s-600);
+  background: rgba(75, 85, 99, 0.22);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--s-300);
+  white-space: nowrap;
+}
+.seerr-badge::before {
+  content: "";
+  width: 0.42rem; height: 0.42rem;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.9;
+}
+.seerr-badge.active, .seerr-badge.green, .seerr-badge.success {
+  border-color: rgba(16, 185, 129, 0.45);
+  background: rgba(16, 185, 129, 0.14);
+  color: var(--s-green-400);
+}
+.seerr-badge.expired, .seerr-badge.warning, .seerr-badge.yellow {
+  border-color: rgba(251, 191, 36, 0.45);
+  background: rgba(251, 191, 36, 0.12);
+  color: var(--s-yellow-400);
+}
+.seerr-badge.disabled, .seerr-badge.danger, .seerr-badge.red {
+  border-color: rgba(239, 68, 68, 0.5);
+  background: rgba(239, 68, 68, 0.14);
+  color: var(--s-red-400);
+}
+.seerr-badge.pending {
+  border-color: rgba(99, 102, 241, 0.5);
+  background: rgba(99, 102, 241, 0.14);
+  color: var(--s-indigo-300);
+}
+
+/* 支付页状态徽章（覆盖共享类，仅作用于 seerr 作用域） */
+.seerr .payment-status-pending,
+.seerr .payment-status-paid { border-color: rgba(99, 102, 241, 0.5); background: rgba(99, 102, 241, 0.14); color: var(--s-indigo-300); }
+.seerr .payment-status-expired,
+.seerr .payment-status-canceled,
+.seerr .payment-status-failed { border-color: rgba(239, 68, 68, 0.5); background: rgba(239, 68, 68, 0.14); color: var(--s-red-400); }
+
+/* ---------- 提示 ---------- */
+
+.seerr-alert {
+  margin: 0 0 1.2rem;
+  padding: 0.7rem 0.95rem;
+  border-radius: var(--s-radius-sm);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--s-red-400);
+  font-size: 0.85rem;
+  line-height: 1.55;
+}
+.seerr-alert.success {
+  border-color: rgba(16, 185, 129, 0.5);
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--s-green-400);
+}
+
+/* ---------- 首页入口卡片 ---------- */
+
+.seerr-entry-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13.5rem, 1fr));
+  gap: 1rem;
+}
+.seerr-entry {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.9rem;
+  padding: 1.15rem 1.2rem;
+  border-radius: var(--s-radius);
+  border: 1px solid var(--s-700);
+  background: rgba(31, 41, 55, 0.72);
+  text-decoration: none;
+  overflow: hidden;
+  transition: transform 0.22s cubic-bezier(0.21, 0.61, 0.35, 1), border-color 0.22s ease, background-color 0.22s ease, box-shadow 0.22s ease;
+}
+.seerr-entry:hover {
+  transform: translateY(-3px);
+  border-color: var(--s-indigo-500);
+  background: rgba(43, 54, 72, 0.85);
+  box-shadow: 0 16px 40px rgba(2, 6, 18, 0.5), 0 0 0 1px rgba(99, 102, 241, 0.25);
+}
+.seerr-entry-icon {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 2.6rem; height: 2.6rem;
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.22), rgba(168, 85, 247, 0.18));
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  color: var(--s-indigo-300);
+}
+.seerr-entry-icon svg { width: 1.35rem; height: 1.35rem; }
+.seerr-entry-copy { display: flex; flex-direction: column; min-width: 0; }
+.seerr-entry-copy strong { font-size: 0.95rem; font-weight: 700; color: var(--s-100); }
+.seerr-entry-copy small { margin-top: 0.3rem; font-size: 0.8rem; line-height: 1.5; color: var(--s-400); }
+.seerr-entry-arrow {
+  margin-left: auto;
+  align-self: center;
+  flex-shrink: 0;
+  color: var(--s-500);
+  transition: transform 0.22s ease, color 0.22s ease;
+}
+.seerr-entry:hover .seerr-entry-arrow { transform: translateX(3px); color: var(--s-indigo-400); }
+.seerr-entry-arrow svg { width: 1.05rem; height: 1.05rem; }
+
+/* ---------- 方案卡片（购买 / 续费） ---------- */
+
+.seerr-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.6rem;
+}
+.seerr-plan {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 1.35rem 1.3rem 1.2rem;
+  border-radius: var(--s-radius);
+  border: 1px solid var(--s-700);
+  background: rgba(31, 41, 55, 0.72);
+  transition: transform 0.22s cubic-bezier(0.21, 0.61, 0.35, 1), border-color 0.22s ease, box-shadow 0.22s ease, background-color 0.22s ease;
+}
+.seerr-plan:hover {
+  transform: translateY(-3px);
+  border-color: var(--s-indigo-500);
+  background: rgba(43, 54, 72, 0.85);
+  box-shadow: 0 16px 40px rgba(2, 6, 18, 0.5), 0 0 0 1px rgba(99, 102, 241, 0.22);
+}
+.seerr-plan-name { font-size: 1rem; font-weight: 700; color: var(--s-100); }
+.seerr-plan-meta { font-size: 0.8rem; color: var(--s-400); }
+.seerr-plan-price { margin-top: auto; display: flex; align-items: baseline; gap: 0.4rem; }
+.seerr-plan-price .cur { font-size: 0.8rem; font-weight: 600; color: var(--s-400); }
+.seerr-plan-price .amt { font-size: 1.55rem; font-weight: 800; letter-spacing: -0.02em; color: var(--s-100); }
+.seerr-plan .seerr-btn { width: 100%; margin-top: 0.55rem; }
+.seerr-plan-buyer { margin-top: 0.2rem; }
+.seerr-plan-buyer .seerr-input { margin-bottom: 0.5rem; }
+
+/* ---------- 分割线 ---------- */
+
+.seerr-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin: 1.4rem 0 1.3rem;
+  color: var(--s-500);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+.seerr-divider::before, .seerr-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--s-700), transparent);
+}
+
+/* ---------- 页脚链接 ---------- */
+
+.seerr-foot {
+  margin-top: 1.9rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid rgba(55, 65, 81, 0.6);
+  font-size: 0.8rem;
+  color: var(--s-500);
+  text-align: center;
+  line-height: 2;
+}
+.seerr-foot a {
+  color: var(--s-indigo-400);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+.seerr-foot a:hover { color: var(--s-indigo-300); text-decoration: underline; }
+.seerr-foot .sep { margin: 0 0.5rem; color: var(--s-600); }
+
+/* ---------- 用户中心布局（seerr 顶栏 + 内容） ---------- */
+
+.seerr-topbar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  height: 4rem;
+  padding: 0 1.5rem;
+  background: transparent;
+  border-bottom: 1px solid transparent;
+  transition: background-color 0.3s ease, backdrop-filter 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+}
+.seerr-topbar.scrolled {
+  background: rgba(55, 65, 81, 0.78);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-bottom-color: rgba(75, 85, 99, 0.5);
+  box-shadow: 0 6px 24px rgba(2, 6, 18, 0.35);
+}
+.seerr-topbar .seerr-brand { margin-bottom: 0; }
+.seerr-topbar .seerr-brand-mark { width: 2.1rem; height: 2.1rem; border-radius: 9px; }
+.seerr-topbar .seerr-brand-mark svg { width: 1.1rem; height: 1.1rem; }
+
+.seerr-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.seerr-nav a {
+  padding: 0.45rem 0.85rem;
+  border-radius: var(--s-radius-sm);
+  font-size: 0.87rem;
+  font-weight: 600;
+  color: var(--s-400);
+  text-decoration: none;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+.seerr-nav a:hover { color: var(--s-100); background: rgba(107, 114, 128, 0.18); }
+.seerr-nav a.active {
+  color: var(--s-100);
+  background: rgba(99, 102, 241, 0.2);
+  box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.35);
+}
+
+.seerr-main {
+  position: relative;
+  z-index: 1;
+  width: min(76rem, calc(100% - 3rem));
+  margin: 0 auto;
+  padding: 6.5rem 0 4.5rem;
+}
+
+.seerr-page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.9rem;
+}
+
+.seerr-panel {
+  padding: 1.6rem 1.7rem;
+  border-radius: var(--s-radius);
+  border: 1px solid var(--s-700);
+  background: rgba(31, 41, 55, 0.66);
+  box-shadow: 0 14px 40px rgba(2, 6, 18, 0.35);
+}
+.seerr-panel-title {
+  margin: 0 0 0.35rem;
+  font-size: 1.06rem;
+  font-weight: 700;
+  color: var(--s-100);
+}
+.seerr-panel-copy { margin: 0; font-size: 0.85rem; color: var(--s-400); }
+
+.seerr-hero-grid {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 1.2rem;
+  margin-bottom: 1.2rem;
+}
+@media (max-width: 760px) {
+  .seerr-hero-grid { grid-template-columns: 1fr; }
+  .seerr-topbar { padding: 0 1rem; }
+  .seerr-main { width: min(100% - 2rem, 76rem); }
+  .seerr-nav a span.label-full { display: none; }
+}
+
+.seerr-expiry {
+  margin: 0.2rem 0 0.4rem;
+  font-size: 2.2rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+.seerr-key-value { display: flex; flex-direction: column; gap: 0.6rem; }
+.seerr-key-value .kv { display: flex; justify-content: space-between; gap: 1rem; font-size: 0.88rem; }
+.seerr-key-value .kv dt { color: var(--s-400); font-weight: 600; }
+.seerr-key-value .kv dd { margin: 0; color: var(--s-200); font-weight: 700; text-align: right; }
+
+.seerr-link-row { display: flex; flex-wrap: wrap; gap: 0.8rem; margin-top: 1.3rem; }
+
+/* ---------- 支付页 ---------- */
+
+.seerr-amount {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.35rem;
+  margin: 0.5rem 0 1.2rem;
+  padding: 1.1rem 0;
+  border-radius: var(--s-radius);
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.16), rgba(168, 85, 247, 0.12));
+  border: 1px solid rgba(99, 102, 241, 0.3);
+}
+.seerr-amount .cur { font-size: 1rem; font-weight: 700; color: var(--s-indigo-300); }
+.seerr-amount .amt { font-size: 2.4rem; font-weight: 800; letter-spacing: -0.03em; color: var(--s-100); }
+
+.seerr-status-line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  margin-bottom: 1.3rem;
+  font-size: 0.85rem;
+  color: var(--s-400);
+}
+
+.seerr-code {
+  display: block;
+  margin: 0.8rem auto 1.1rem;
+  padding: 1rem 1.2rem;
+  width: fit-content;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  border-radius: var(--s-radius-sm);
+  border: 1px dashed rgba(99, 102, 241, 0.5);
+  background: rgba(99, 102, 241, 0.1);
+  font-family: "SFMono-Regular", "Cascadia Code", Consolas, monospace;
+  font-size: 1.02rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--s-indigo-300);
+}
+
+/* ---------- 结果页 ---------- */
+
+.seerr-result-icon {
+  display: grid;
+  place-items: center;
+  width: 4.2rem; height: 4.2rem;
+  margin: 0 auto 1.4rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--s-indigo-500), var(--s-purple-500));
+  box-shadow: 0 14px 36px rgba(99, 102, 241, 0.4);
+  color: #fff;
+}
+.seerr-result-icon svg { width: 2rem; height: 2rem; }
+.seerr-result-card { text-align: center; }
+.seerr-result-card .seerr-title { margin-top: 0.2rem; }
+
+/* ---------- 入场与滚动动画 ---------- */
+
+@keyframes seerr-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+.seerr-rise {
+  animation: seerr-rise 0.55s cubic-bezier(0.21, 0.61, 0.35, 1) both;
+  animation-delay: var(--d, 0s);
+}
+
+.reveal {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 0.55s cubic-bezier(0.21, 0.61, 0.35, 1), transform 0.55s cubic-bezier(0.21, 0.61, 0.35, 1);
+  transition-delay: var(--d, 0s);
+}
+.reveal.visible { opacity: 1; transform: none; }
+
+/* ---------- 顶部加载进度条（nprogress 风格） ---------- */
+
+.seerr-progress {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  z-index: 100;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(90deg, var(--s-indigo-500), var(--s-purple-400));
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.6);
+  transform-origin: left center;
+  transform: scaleX(0);
+  transition: opacity 0.35s ease;
+}
+.seerr-progress.active {
+  opacity: 1;
+  animation: seerr-load 2.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes seerr-load {
+  0% { transform: scaleX(0); }
+  55% { transform: scaleX(0.72); }
+  100% { transform: scaleX(0.96); opacity: 0; }
+}
+
+/* ---------- 无障碍 ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .seerr-rise, .reveal { animation: none; transition: none; opacity: 1; transform: none; }
+  .seerr-progress { display: none; }
+  .seerr-entry, .seerr-plan { transition: border-color 0.15s ease, background-color 0.15s ease; transform: none; }
+}
+
+/* MoviePilot 环境光 + 玻璃卡的降级策略 */
+@media (prefers-reduced-motion: reduce) {
+  .seerr-deco::before, .seerr-deco::after, .seerr-deco .seerr-deco-blob { animation: none; }
+  .seerr-auth-card { animation: none; }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .seerr-auth-card {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: rgba(24, 33, 48, 0.96);
+  }
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .seerr-auth-card {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: rgba(24, 33, 48, 0.96);
+  }
+}
