@@ -9,8 +9,7 @@ import (
 )
 
 func TestSearchMultiParsesMoviesAndSeries(t *testing.T) {
-	var server *httptest.Server
-	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/search/multi" {
 			t.Fatalf("unexpected path %q", r.URL.Path)
 		}
@@ -53,8 +52,7 @@ func TestSearchMultiParsesMoviesAndSeries(t *testing.T) {
 }
 
 func TestSearchMultiRespectsLimit(t *testing.T) {
-	var server *httptest.Server
-	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		payload := map[string]any{
 			"results": []map[string]any{
 				{"id": 1, "media_type": "movie", "title": "A"},
@@ -88,8 +86,7 @@ func TestSearchMultiRejectsUnconfiguredClient(t *testing.T) {
 }
 
 func TestDetailsReturnsNotFoundAsMissing(t *testing.T) {
-	var server *httptest.Server
-	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/movie/9999999" {
 			t.Fatalf("unexpected path %q", r.URL.Path)
 		}

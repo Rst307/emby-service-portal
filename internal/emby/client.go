@@ -209,7 +209,7 @@ type libraryItem struct {
 func decodeItemsWithProviderIDs(response *http.Response) ([]libraryItem, error) {
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return nil, fmt.Errorf("Emby library query returned HTTP %d", response.StatusCode)
+		return nil, fmt.Errorf("query Emby library returned HTTP %d", response.StatusCode)
 	}
 	body, err := io.ReadAll(io.LimitReader(response.Body, 8<<20))
 	if err != nil {
