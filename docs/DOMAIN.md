@@ -11,6 +11,7 @@
 | `payments` | 售卖方案、支付订单、支付中心对账与履约、支付设置 | `payment_plans`、`payment_orders`、`payment_events`、`settings` 中的支付中心配置 |
 | `auth` | 管理员身份与后台会话 | `admins`、`sessions` |
 | `portal` | 用户中心会话；密码直接向 Emby 验证，不落盘 | `user_sessions` |
+| `requests` | 求剧：TMDB 搜索（返回 IMDb/TMDB 结果）、对照 Emby 库存标记、提交/管理求剧记录 | `media_requests` |
 | `expiry` | worker：到期标记 + Emby 访问策略同步（outbox 消费方） | 只读 `accounts`；写 `emby_access_sync_jobs`（outbox） |
 | `settings` | 运行时设置（显示时区等） | `settings` |
 | `credentials` | 凭据主密钥加密/解密/轮换（Vault） | `account_credentials` 的加解密契约 |
@@ -24,6 +25,7 @@
 | `invite_codes` / `invite_redemptions` | `invites.Service` | `payments`（仅生成激活码辅助函数） | 支付履约生成的一次性激活码也是邀请码 |
 | `payment_plans` / `payment_orders` / `payment_events` | `payments.Service` | 管理后台只读 | 方案快照进订单，改方案不影响已建订单 |
 | `sessions` / `user_sessions` | `auth` / `portal` | 各自会话校验 | 两类会话生命周期独立 |
+| `media_requests` | `requests.Service` | 管理后台只读；`portal` 经服务方法 | 同一业务账号对同一 TMDB 标题只保留一条记录；驳回后可重新激活 |
 | `emby_access_sync_jobs` | 所有触发状态变更的模块经 `upsertAccessSyncJob` | `expiry` | 消费方唯一 |
 
 ## 依赖规则
@@ -42,6 +44,7 @@
 | `payments` | `CreateActivationOrder` / `CreateRenewalOrder` / `CreateRenewalOrderForAccount` / `HandleWebhook` / `Reconcile` / 方案 CRUD 与启停 / `ListOrders` / `Settings` / `UpdateSettings` |
 | `auth` | `BootstrapAdmin` / `Login` / `Authenticated` / `Logout` |
 | `portal` | `Login` / `Account` / `Logout` |
+| `requests` | `Search`（TMDB 结果 + Emby 库存/本人求剧标记）/ `Create`（服务端回查 TMDB 与库存后落单）/ `List` / `SetStatus` / `Delete` |
 | `settings` | `DisplayTimeZone` / `SetDisplayTimeZone` / `Ensure` |
 
 ## 领域模型文件

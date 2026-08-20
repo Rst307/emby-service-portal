@@ -25,6 +25,10 @@ type Config struct {
 	CookieSecure          bool
 	SessionTTL            time.Duration
 	TimeZone              string
+	TmdbAPIKey            string
+	// TmdbBaseURL overrides the public TMDB endpoint; it exists for tests and
+	// intentionally has no ESP_* environment binding.
+	TmdbBaseURL string
 }
 
 func FromEnv() (Config, error) {
@@ -49,6 +53,7 @@ func FromEnv() (Config, error) {
 		CookieSecure:          cookieSecure,
 		SessionTTL:            ttl,
 		TimeZone:              value("ESP_TIME_ZONE", "Asia/Shanghai"),
+		TmdbAPIKey:            os.Getenv("ESP_TMDB_API_KEY"),
 	}
 	return cfg, cfg.Validate()
 }

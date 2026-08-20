@@ -18,11 +18,14 @@ import (
 
 	"github.com/Rst307/emby-service-portal/internal/accounts"
 	"github.com/Rst307/emby-service-portal/internal/auth"
+	"github.com/Rst307/emby-service-portal/internal/domain"
 	"github.com/Rst307/emby-service-portal/internal/invites"
 	"github.com/Rst307/emby-service-portal/internal/payments"
 	"github.com/Rst307/emby-service-portal/internal/portal"
 	"github.com/Rst307/emby-service-portal/internal/ratelimit"
+	"github.com/Rst307/emby-service-portal/internal/requests"
 	"github.com/Rst307/emby-service-portal/internal/settings"
+	"github.com/Rst307/emby-service-portal/internal/tmdb"
 	"github.com/Rst307/emby-service-portal/internal/web/admin"
 )
 
@@ -36,6 +39,8 @@ type Server struct {
 	accounts     *accounts.Service
 	invites      *invites.Service
 	payments     *payments.Service
+	requests     *requests.Service
+	tmdb         *tmdb.Client
 	settings     *settings.Service
 	apiKey       string
 	templates    *admin.Templates
@@ -43,9 +48,10 @@ type Server struct {
 	sessionTTL   time.Duration
 	loginLimit   *ratelimit.Limiter
 	publicLimit  *ratelimit.Limiter
+	requestLimit *ratelimit.Limiter
 }
 
-func New(authService *auth.Service, portalService *portal.Service, accountService *accounts.Service, inviteService *invites.Service, paymentService *payments.Service, settingsService *settings.Service, apiKey string, cookieSecure bool, sessionTTL time.Duration, timeLocation *time.Location) (*Server, error) {
+func New(authService *auth.Service, portalService *portal.Service, accountService *accounts.Service, inviteService *invites.Service, paymentService *payments.Service, settingsService *settings.Service, requestService *requests.Service, tmdbClient *tmdb.Client, apiKey string, cookieSecure bool, sessionTTL time.Duration, timeLocation *time.Location) (*Server, error) {
 	if timeLocation == nil {
 		timeLocation, _ = time.LoadLocation("Asia/Shanghai")
 	}
@@ -55,8 +61,8 @@ func New(authService *auth.Service, portalService *portal.Service, accountServic
 	}
 	return &Server{
 		auth: authService, portal: portalService, accounts: accountService, invites: inviteService, payments: paymentService,
-		settings: settingsService, apiKey: apiKey, templates: templates, cookieSecure: cookieSecure, sessionTTL: sessionTTL,
-		loginLimit: ratelimit.New(10, time.Minute), publicLimit: ratelimit.New(20, time.Minute),
+		requests: requestService, tmdb: tmdbClient, settings: settingsService, apiKey: apiKey, templates: templates, cookieSecure: cookieSecure, sessionTTL: sessionTTL,
+		loginLimit: ratelimit.New(10, time.Minute), publicLimit: ratelimit.New(20, time.Minute), requestLimit: ratelimit.New(20, time.Hour),
 	}, nil
 }
 
@@ -103,6 +109,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /admin/invites/{id}/delete", s.inviteDelete)
 	mux.HandleFunc("GET /admin/plans", s.planList)
 	mux.HandleFunc("GET /admin/orders", s.orderList)
+	mux.HandleFunc("GET /admin/requests", s.adminRequestList)
+	mux.HandleFunc("POST /admin/requests/{id}/fulfill", s.adminRequestSetStatus(domain.MediaRequestFulfilled))
+	mux.HandleFunc("POST /admin/requests/{id}/reject", s.adminRequestSetStatus(domain.MediaRequestRejected))
+	mux.HandleFunc("POST /admin/requests/{id}/delete", s.adminRequestDelete)
 	mux.HandleFunc("POST /admin/plans", s.planCreate)
 	mux.HandleFunc("GET /admin/plans/{id}/edit", s.planEdit)
 	mux.HandleFunc("POST /admin/plans/{id}/update", s.planUpdate)
@@ -114,6 +124,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /portal/login", s.portalLoginPage)
 	mux.HandleFunc("POST /portal/login", s.portalLogin)
 	mux.HandleFunc("GET /portal/", s.portalDashboard)
+	mux.HandleFunc("GET /portal/request", s.portalRequestPage)
+	mux.HandleFunc("POST /portal/request", s.portalRequestCreate)
 	mux.HandleFunc("POST /portal/logout", s.portalLogout)
 	mux.HandleFunc("GET /login", s.portalLoginPage)
 	mux.HandleFunc("POST /login", s.portalLogin)
@@ -293,7 +305,7 @@ func securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "same-origin")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'nonce-"+nonce+"' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://cloudflareinsights.com; img-src 'self' data:")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'nonce-"+nonce+"' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://cloudflareinsights.com; img-src 'self' data: https://image.tmdb.org")
 		next.ServeHTTP(w, r)
 	})
 }

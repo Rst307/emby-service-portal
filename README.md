@@ -19,6 +19,7 @@
 - 可配置的显示时区（默认上海，后台「设置」页随时切换），时间展示统一按所选时区转换，存储始终 UTC。
 - 对接 `wxpay-payment-center`：管理员可配置支付中心商户凭证，维护不限数量的激活码购买方案与订阅续费方案。
 - 支付成功后自动生成一次性激活码，或为已验证的 Emby 用户完成订阅续费；支付回调验签、订单金额快照和重复回调幂等处理均在本地完成。
+- 用户中心「求剧」：登录用户可搜索 TMDB 影视库，页面按 TMDB 编号对照当前 Emby 库存标记「已在库 / 可求剧」；未入库的影视可一键提交求剧，管理员在「求剧管理」查看剧名、TMDB 编号、求剧用户与时间，并标记已入库或驳回。需要 `ESP_TMDB_API_KEY`。
 
 ## 快速开始
 
@@ -40,6 +41,8 @@ go run ./cmd/emby-service-portal
 
 - 管理员登录：`/admin/login`
 - 用户中心：`/portal/login`
+- 用户求剧：`/portal/request`（需登录）
+- 管理员求剧管理：`/admin/requests`
 - 邀请码注册：`/register`
 - 邀请码续费：`/renew`
 - 健康检查：`/healthz`
@@ -56,6 +59,10 @@ go run ./cmd/emby-service-portal
 - 回调地址：填写 `https://你的域名/webhooks/wxpay-payment-center`，并在支付中心应用中使用完全相同的地址。
 - 支付后跳转地址（可选）：例如 `https://你的域名/payment/{token}`。支付中心约 3 秒后将用户带回；`{token}`、`{order_no}` 和 `{merchant_order_no}` 会替换为当前订单值。必须是 HTTPS 完整地址，最多 2048 个字符。
 - 订单有效期：支付中心订单的有效分钟数，范围 1–1440。
+
+### 求剧功能（可选）
+
+在 TMDB（https://www.themoviedb.org）申请一个 API Key/读写令牌，配置为环境变量 `ESP_TMDB_API_KEY` 后，登录用户中心的用户即可在「求剧」页搜索影视（返回 TMDB 结果）。页面会通过 Emby 的 `AnyProviderIdEquals` 按 TMDB 编号实时对照当前库存，已存在的影视显示「已在库」且不能求剧；未存在的可一键提交。管理员在「求剧管理」页面查看每条记录（剧名、原始片名、TMDB 编号、求剧用户、求剧时间、状态），入库后标记「已入库」，无法提供的可标记「已驳回」（用户可重新求剧）或删除。未配置该变量时，求剧搜索不可用，但历史求剧记录仍可在后台管理。
 
 管理员在「售卖方案」页面分别添加激活码方案和订阅续费方案，可以添加任意数量。激活码购买页允许用户填写购买人或联系方式，管理员可在「支付订单」中查询；续费订单自动记录被续费的业务账号，同时会将购买人/业务账号作为 R Pay 的订单备注，方便在支付中心后台核对。价格以人民币元填写，服务端以整数分保存；修改方案不会改变已创建订单的价格和天数快照。生产环境必须使用 HTTPS，支付回调不能依赖浏览器 Cookie 或 CSRF，而是依赖支付中心 HMAC 签名。
 
@@ -75,6 +82,7 @@ go run ./cmd/emby-service-portal
 | `ESP_COOKIE_SECURE` | 否 | HTTPS 生产环境设为 `true`；仅可信局域网的直接 HTTP 可设为 `false`。 |
 | `ESP_SESSION_TTL` | 否 | 会话有效期，默认 `24h`。 |
 | `ESP_TIME_ZONE` | 否 | 初始显示时区（首次启动写入设置，之后可在后台「设置」页随时切换），默认 `Asia/Shanghai`。所有页面展示的时间都会按此转换；数据库和 API 仍以 UTC/RFC3339 保存和返回。 |
+| `ESP_TMDB_API_KEY` | 否 | TMDB API Key，启用用户中心「求剧」功能；留空则求剧搜索不可用（后台仍可管理历史求剧记录）。 |
 
 生成随机密钥：
 
@@ -218,8 +226,10 @@ internal/
 │   ├── accounts.go       业务账号存取与乐观锁
 │   ├── saga.go           创建/注册持久化 Saga
 │   ├── invites.go        邀请码与兑换存取
+│   ├── requests.go       求剧记录存取
 │   └── sync.go           Emby 访问同步 outbox
 ├── portal/               用户中心
+├── requests/             求剧（TMDB 搜索与求剧记录）
 ├── ratelimit/            登录/注册/续费限流
 ├── settings/             显示时区设置
 └── web/                  HTTP 层（按页面域拆分）
@@ -227,6 +237,7 @@ internal/
     ├── api.go            REST API（/api/v1/*）
     ├── public.go         公开门户页（/、/register、/renew、结果页）
     ├── portal.go         用户中心（/portal/*）
+    ├── requests.go      求剧页与求剧管理（/portal/request、/admin/requests）
     ├── payment.go        购买与支付（/purchase、/payment/*、回调）
     ├── admin_login.go    管理员登录与登出
     ├── admin_dashboard.go 工作台
@@ -235,8 +246,7 @@ internal/
     ├── admin_plans.go    售卖方案
     ├── admin_orders.go   支付订单
     ├── admin_settings.go 系统设置
-    └── admin/            后台 HTML 模板
-scripts/                  安装脚本
+    └── admin/            后台 HTML 模板scripts/                  安装脚本
 docs/                     API 文档与架构决策
 Dockerfile                多阶段容器构建
 Makefile                  常用开发命令

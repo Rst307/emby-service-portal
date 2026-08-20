@@ -30,6 +30,9 @@
     <a class="menu-item {{if eq .active "invites"}}active{{end}}" {{if eq .active "invites"}}aria-current="page"{{end}} href="/admin/invites">
       <span class="menu-icon" aria-hidden="true">⌁</span><span class="menu-label">邀请码</span>
     </a>
+    <a class="menu-item {{if eq .active "requests"}}active{{end}}" {{if eq .active "requests"}}aria-current="page"{{end}} href="/admin/requests">
+      <span class="menu-icon" aria-hidden="true">⌾</span><span class="menu-label">求剧管理</span>
+    </a>
     <p class="menu-group-title">系统</p>
     <a class="menu-item {{if eq .active "settings"}}active{{end}}" {{if eq .active "settings"}}aria-current="page"{{end}} href="/admin/settings">
       <span class="menu-icon" aria-hidden="true">⚙</span><span class="menu-label">系统设置</span>
@@ -58,4 +61,13 @@
 {{define "alerts"}}
 {{if .Error}}<p class="alert error" role="alert">{{.Error}}</p>{{end}}
 {{if .Message}}<p class="alert success" role="status">{{.Message}}</p>{{end}}
+{{end}}
+
+{{define "portal-nav"}}
+<nav class="seerr-nav" aria-label="用户中心导航">
+  <a {{if eq .PortalActive "subscription"}}class="active" aria-current="page"{{end}} href="/portal/">我的订阅</a>
+  <a {{if eq .PortalActive "request"}}class="active" aria-current="page"{{end}} href="/portal/request">求剧</a>
+  <a href="/purchase"><span class="label-full">购买激活码</span><span>购买</span></a>
+  <a href="/renew"><span class="label-full">续费订阅</span><span>续费</span></a>
+</nav>
 {{end}}

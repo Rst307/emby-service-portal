@@ -44,8 +44,12 @@ _Avoid_: payment, order
 A server-side authenticated session that identifies one 业务账号. When the session is valid, renewal uses that account identity rather than trusting a username or password submitted by the browser.
 _Avoid_: hidden account field
 
-**禁用**:
+**禁用**：
 The state in which login is denied by setting the linked Emby 用户's `IsDisabled` policy to true. It does not delete the user or their Emby data.
 _Avoid_: deletion, removal
+
+**求剧**:
+A request submitted through the 用户中心 for a movie or TV show not present in the Emby library, snapshotting the TMDB catalog record (title, TMDB id, media type). One 业务账号 can hold one request per TMDB title; an administrator marks it 已入库 or 已驳回, and a rejected request can be re-submitted.
+_Avoid_: media request ticket, suggestion
 
 模块职责与数据归属见 `docs/DOMAIN.md`，架构决策见 `docs/adr/`。

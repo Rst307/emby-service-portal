@@ -7,11 +7,14 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/Rst307/emby-service-portal/internal/domain"
 	"github.com/Rst307/emby-service-portal/internal/payments"
+	"github.com/Rst307/emby-service-portal/internal/requests"
+	"github.com/Rst307/emby-service-portal/internal/tmdb"
 )
 
 //go:embed templates/*.html
@@ -53,6 +56,21 @@ type ViewData struct {
 	OrderStatus       string
 	OrderKind         string
 	BuyerInfo         string
+	// 求剧（media requests）
+	PortalActive       string
+	SearchResults      []requests.SearchItem
+	RequestQuery       string
+	TmdbConfigured     bool
+	RequestEnabled     bool
+	MediaRequests      []domain.MediaRequest
+	RequestTotal       int
+	RequestPending     int
+	RequestFulfilled   int
+	RequestStatus      string
+	RequestPage        int
+	RequestPageSize    int
+	RequestTotalPages  int
+	RequestFilterQuery string
 }
 
 // PlanEditData contains the editable catalog fields and the original plan metadata.
@@ -147,6 +165,38 @@ func NewTemplates(location *time.Location) (*Templates, error) {
 				return status
 			}
 		},
+		"requestStatusLabel": func(status string) string {
+			switch status {
+			case "pending":
+				return "待处理"
+			case "fulfilled":
+				return "已入库"
+			case "rejected":
+				return "已驳回"
+			default:
+				return status
+			}
+		},
+		"mediaTypeLabel": func(mediaType string) string {
+			if mediaType == "tv" {
+				return "剧集"
+			}
+			return "电影"
+		},
+		"posterURL": func(path string) string { return tmdb.PosterURL(path) },
+		"yearOnly": func(date string) string {
+			date = strings.TrimSpace(date)
+			if len(date) >= 4 {
+				return date[:4]
+			}
+			return date
+		},
+		"firstRune": func(value string) string {
+			for _, r := range value {
+				return string(r)
+			}
+			return "?"
+		},
 		"adminPageLabel": func(active string) string {
 			switch active {
 			case "dashboard":
@@ -159,6 +209,8 @@ func NewTemplates(location *time.Location) (*Templates, error) {
 				return "售卖方案"
 			case "orders":
 				return "支付订单"
+			case "requests":
+				return "求剧管理"
 			case "settings":
 				return "系统设置"
 			default:

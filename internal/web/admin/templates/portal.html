@@ -47,11 +47,7 @@
       </span>
       <span class="seerr-brand-copy"><strong>Emby Service Portal</strong><small>MEMBER ACCESS</small></span>
     </a>
-    <nav class="seerr-nav" aria-label="用户中心导航">
-      <a class="active" aria-current="page" href="/portal/">我的订阅</a>
-      <a href="/purchase"><span class="label-full">购买激活码</span><span>购买</span></a>
-      <a href="/renew"><span class="label-full">续费订阅</span><span>续费</span></a>
-    </nav>
+    {{template "portal-nav" .}}
     <form method="post" action="/portal/logout">
       <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
       <button class="seerr-btn seerr-btn-ghost" type="submit" style="padding:.42rem .9rem">退出登录</button>
@@ -96,6 +92,7 @@
       <div class="seerr-link-row">
         <a class="seerr-btn seerr-btn-ghost" href="/purchase">购买激活码 →</a>
         <a class="seerr-btn seerr-btn-ghost" href="/renew">续费订阅 →</a>
+        <a class="seerr-btn seerr-btn-ghost" href="/portal/request">求剧 →</a>
       </div>
     </section>
   </main>

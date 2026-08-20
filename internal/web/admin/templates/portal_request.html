@@ -1,0 +1,114 @@
+{{define "portal-request"}}<!doctype html>
+<html lang="zh-CN">
+<head>
+  {{template "head" "求剧 · Emby Service Portal"}}
+</head>
+<body class="seerr">
+  <div class="seerr-deco" aria-hidden="true"><span class="seerr-deco-blob"></span></div>
+  <header class="seerr-topbar" data-seerr-topbar>
+    <a class="seerr-brand" href="/portal/" aria-label="Emby Service Portal 用户中心">
+      <span class="seerr-brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>
+      </span>
+      <span class="seerr-brand-copy"><strong>Emby Service Portal</strong><small>MEMBER ACCESS</small></span>
+    </a>
+    {{template "portal-nav" .}}
+    <form method="post" action="/portal/logout">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <button class="seerr-btn seerr-btn-ghost" type="submit" style="padding:.42rem .9rem">退出登录</button>
+    </form>
+  </header>
+
+  <main class="seerr-main">
+    <section class="seerr-page-head seerr-rise">
+      <div>
+        <p class="seerr-eyebrow">你好，{{.Account.Username}}</p>
+        <h1 class="seerr-title" style="margin-bottom:0">求剧</h1>
+        <p class="seerr-lead" style="margin-bottom:0">搜索 TMDB 影视库，看看想看的内容是否已经在 Emby 里；没有的话就提交求剧，管理员看到后会尽快入库。</p>
+      </div>
+    </section>
+
+    {{if not .TmdbConfigured}}
+    <section class="seerr-panel reveal" role="alert">
+      <p class="seerr-panel-title">求剧功能尚未启用</p>
+      <p class="seerr-panel-copy">管理员还没有配置 TMDB API Key（环境变量 ESP_TMDB_API_KEY），配置后即可搜索和求剧。</p>
+    </section>
+    {{else}}
+    <section class="seerr-panel seerr-search-panel reveal">
+      <form method="get" action="/portal/request" class="seerr-search-form" data-seerr-submit>
+        <label class="seerr-label" for="req-q">搜索影视（电影 / 剧集）</label>
+        <div class="seerr-search-row">
+          <input class="seerr-input" id="req-q" name="q" value="{{.RequestQuery}}" placeholder="输入片名，例如：星际穿越 或 Interstellar" autocomplete="off" autofocus required>
+          <button class="seerr-btn seerr-btn-primary" type="submit">搜索</button>
+        </div>
+      </form>
+      {{if .Error}}<p class="seerr-alert" role="alert">{{.Error}}</p>{{end}}
+      {{if .Message}}<p class="seerr-alert seerr-alert-ok" role="status">{{.Message}}</p>{{end}}
+    </section>
+
+    {{if .SearchResults}}
+    <section class="seerr-results" aria-label="搜索结果">
+      <div class="seerr-results-head">
+        <p class="seerr-eyebrow">{{len .SearchResults}} 条结果</p>
+        <span class="seerr-mute">标记来自当前 Emby 库存</span>
+      </div>
+      {{range .SearchResults}}
+      <article class="seerr-result reveal">
+        <div class="seerr-result-poster">
+          {{if .PosterPath}}<img src="{{posterURL .PosterPath}}" alt="{{.Title}} 海报" loading="lazy">{{else}}<span class="seerr-result-placeholder" aria-hidden="true">{{firstRune .Title}}</span>{{end}}
+        </div>
+        <div class="seerr-result-body">
+          <div class="seerr-result-meta">
+            <span class="seerr-tag">{{mediaTypeLabel .MediaType}}</span>
+            {{if .ReleaseDate}}<span class="seerr-mute">{{yearOnly .ReleaseDate}}</span>{{end}}
+            {{if .OriginalTitle}}<span class="seerr-mute">{{.OriginalTitle}}</span>{{end}}
+          </div>
+          <h2 class="seerr-result-title">{{.Title}}</h2>
+          <p class="seerr-result-overview">{{if .Overview}}{{.Overview}}{{else}}暂无简介。{{end}}</p>
+          <div class="seerr-result-foot">
+            <span class="seerr-id">TMDB #{{.ID}}</span>
+            {{if .InLibrary}}
+              <span class="seerr-badge seerr-badge-inlib">已在库</span>
+            {{else if .AlreadyRequested}}
+              {{if eq .RequestStatus "pending"}}<span class="seerr-badge">已求剧 · 待处理</span>{{end}}
+              {{if eq .RequestStatus "fulfilled"}}<span class="seerr-badge seerr-badge-inlib">已入库</span>{{end}}
+              {{if eq .RequestStatus "rejected"}}
+                <form method="post" action="/portal/request" class="seerr-request-form">
+                  <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                  <input type="hidden" name="q" value="{{$.RequestQuery}}">
+                  <input type="hidden" name="media_type" value="{{.MediaType}}">
+                  <input type="hidden" name="tmdb_id" value="{{.ID}}">
+                  <button class="seerr-btn seerr-btn-primary" type="submit">再次求剧</button>
+                </form>
+              {{end}}
+            {{else}}
+              <form method="post" action="/portal/request" class="seerr-request-form">
+                <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                <input type="hidden" name="q" value="{{$.RequestQuery}}">
+                <input type="hidden" name="media_type" value="{{.MediaType}}">
+                <input type="hidden" name="tmdb_id" value="{{.ID}}">
+                <button class="seerr-btn seerr-btn-primary" type="submit">求剧</button>
+              </form>
+            {{end}}
+          </div>
+        </div>
+      </article>
+      {{end}}
+    </section>
+    {{end}}
+    {{end}}
+
+    <section class="seerr-panel reveal" style="--d:.14s">
+      <p class="seerr-eyebrow">HELP</p>
+      <h2 class="seerr-panel-title">求剧说明</h2>
+      <ul class="seerr-help-list">
+        <li>结果来自 TMDB 数据库；页面会按 TMDB 编号对照当前 Emby 库存，标记「已在库」的影视不需要再求剧。</li>
+        <li>提交后状态为「待处理」，管理员入库后会标记为「已入库」；如无法入库会标记为「已驳回」，届时你可以再次求剧。</li>
+        <li>同一账号对同一部影视只会保留一条求剧记录。</li>
+      </ul>
+    </section>
+  </main>
+  <div class="seerr-progress" data-seerr-progress aria-hidden="true"></div>
+</body>
+</html>
+{{end}}

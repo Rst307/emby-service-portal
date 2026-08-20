@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/Rst307/emby-service-portal/internal/domain"
+	"github.com/Rst307/emby-service-portal/internal/requests"
+	"github.com/Rst307/emby-service-portal/internal/tmdb"
 )
 
 func TestRenderDashboardShowsAccountStats(t *testing.T) {
@@ -245,5 +247,83 @@ func TestRenderDoesNotCommitPartialTemplateOnExecutionFailure(t *testing.T) {
 	}
 	if strings.Contains(response.Body.String(), "partial") {
 		t.Fatalf("response leaked partial template: %q", response.Body.String())
+	}
+}
+
+func TestRenderPortalRequestShowsSearchAndRequestButton(t *testing.T) {
+	templates, err := NewTemplates(time.UTC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	templates.Render(response, "portal-request", ViewData{
+		CSRFToken: "csrf", Account: domain.Account{Username: "alice", Status: "active"}, PortalActive: "request",
+		TmdbConfigured: true, RequestQuery: "星际穿越",
+		SearchResults: []requests.SearchItem{
+			{Result: tmdb.Result{ID: 157336, MediaType: "movie", Title: "星际穿越", OriginalTitle: "Interstellar", PosterPath: "/a.jpg", ReleaseDate: "2014-11-05", Overview: "地球荒芜"}},
+			{Result: tmdb.Result{ID: 111, MediaType: "movie", Title: "教父", PosterPath: ""}, AlreadyRequested: true, RequestStatus: "pending"},
+			{Result: tmdb.Result{ID: 1399, MediaType: "tv", Title: "权力的游戏", PosterPath: ""}, InLibrary: true},
+		},
+	})
+	page := response.Body.String()
+	for _, marker := range []string{"求剧", "搜索影视", "name=\"q\" value=\"星际穿越\"", "星际穿越", "电影", "剧集", "TMDB #157336", "type=\"submit\">求剧", "已在库", "已求剧", "MEMBER ACCESS", "退出登录"} {
+		if !strings.Contains(page, marker) {
+			t.Fatalf("portal-request missing %q: %s", marker, page)
+		}
+	}
+	if !strings.Contains(page, `value="157336"`) || !strings.Contains(page, `name="media_type" value="movie"`) {
+		t.Fatalf("portal-request form lacks tmdb fields: %s", page)
+	}
+	if strings.Contains(page, `<button class="seerr-btn seerr-btn-primary" type="submit">求剧</button>`) {
+		return
+	}
+	// InLibrary results must never offer the request button.
+	if idx := strings.Index(page, "已在库"); idx >= 0 {
+		if strings.Contains(page[idx:], "type=\"submit\">求剧") {
+			t.Fatalf("in-library item still offers request: %s", page[idx:idx+400])
+		}
+	}
+}
+
+func TestRenderPortalRequestNotConfiguredShowsNotice(t *testing.T) {
+	templates, err := NewTemplates(time.UTC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	templates.Render(response, "portal-request", ViewData{Account: domain.Account{Username: "alice"}, TmdbConfigured: false, PortalActive: "request", CSRFToken: "csrf"})
+	page := response.Body.String()
+	for _, marker := range []string{"求剧功能尚未启用", "ESP_TMDB_API_KEY"} {
+		if !strings.Contains(page, marker) {
+			t.Fatalf("portal-request missing %q: %s", marker, page)
+		}
+	}
+}
+
+func TestRenderAdminRequestsShowsRecordsAndActions(t *testing.T) {
+	templates, err := NewTemplates(time.UTC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	templates.Render(response, "requests", ViewData{
+		CSRFToken: "csrf", RequestEnabled: true,
+		MediaRequests: []domain.MediaRequest{
+			{ID: 7, AccountUsername: "alice", AccountID: 1, TmdbID: 157336, MediaType: "movie", Title: "星际穿越", OriginalTitle: "Interstellar", PosterPath: "/a.jpg", ReleaseDate: "2014-11-05", Status: "pending", CreatedAt: time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)},
+			{ID: 8, AccountUsername: "bob", AccountID: 2, TmdbID: 1399, MediaType: "tv", Title: "权力的游戏", Status: "fulfilled", CreatedAt: time.Date(2030, 1, 2, 0, 0, 0, 0, time.UTC)},
+		},
+		RequestTotal: 2, RequestPending: 1, RequestFulfilled: 1, RequestPage: 1, RequestPageSize: 20, RequestTotalPages: 1,
+	})
+	page := response.Body.String()
+	for _, marker := range []string{"求剧管理", "星际穿越", "Interstellar", "alice", "bob", "TMDB 编号", "#157336", "themoviedb.org/movie/157336", "待处理", "已入库", "标记已入库", "驳回", "删除", "确认删除这条求剧记录？", "求剧总数", "查询求剧"} {
+		if !strings.Contains(page, marker) {
+			t.Fatalf("requests page missing %q: %s", marker, page)
+		}
+	}
+	if !strings.Contains(page, "/admin/requests/7/fulfill") || !strings.Contains(page, "/admin/requests/7/reject") || !strings.Contains(page, "/admin/requests/8/delete") {
+		t.Fatalf("requests page lacks action forms: %s", page)
+	}
+	if strings.Contains(page, "当前未配置 TMDB API Key") {
+		t.Fatalf("enabled requests page still shows the not-configured banner: %s", page[:300])
 	}
 }

@@ -18,7 +18,7 @@ flowchart TD
 - **部署单元**：一个静态 Linux amd64 二进制（`cmd/emby-service-portal`），无前端构建、无缓存、无消息队列。
 - **进程内协作者**：HTTP 服务（`internal/web`）+ 后台循环（main.go 内 ticker，5 分钟周期，顺序执行三个任务：账号创建 Saga 恢复 → 到期扫描与 Emby outbox 同步 → 支付订单对账）。
 - **SQLite**：WAL 模式、`MaxOpenConns=1`、迁移内嵌于二进制（`//go:embed migrations/*.sql`），时间存储一律 UTC。
-- **外部依赖**：仅 Emby 管理 API 与 R Pay 支付中心两个 HTTP 服务。
+- **外部依赖**：仅 Emby 管理 API 与 R Pay 支付中心两个 HTTP 服务；可选的 TMDB API（`internal/tmdb`）仅服务于求剧功能。
 
 ## 模块图与依赖规则
 
@@ -29,6 +29,7 @@ flowchart LR
     Web --> Accounts[accounts]
     Web --> Invites[invites]
     Web --> Payments[payments]
+    Web --> Requests[requests]
     Web --> Settings[settings]
     Invites --> Accounts
     Payments --> Accounts
@@ -38,7 +39,9 @@ flowchart LR
     Portal --> Emby
     Payments --> PC[paymentcenter]
     Payments --> Credentials
-    Auth & Portal & Accounts & Invites & Payments & Settings & Expiry[expiry] --> Sqlite[sqlite 仓储]
+    Requests --> Tmdb[tmdb]
+    Requests --> Emby
+    Auth & Portal & Accounts & Invites & Payments & Settings & Requests & Expiry[expiry] --> Sqlite[sqlite 仓储]
     Sqlite --> Domain[domain 领域模型]
     Accounts & Invites & Payments & Auth & Portal & Expiry & Settings & Web --> Domain
 ```
@@ -83,11 +86,29 @@ R Pay 回调 → paymentcenter.VerifyNotification（HMAC + 时间戳 + 金额快
 
 回调验签与履约全在本地；SQLite 事务内不调用 Emby 或支付中心。
 
+### 4. 求剧（搜索标注 + 提交 + 后台管理）
+
+```
+用户中心 /portal/request?q=… → requests.Search
+  → tmdb.SearchMulti（zh-CN）→ 结果集
+  → emby.AnyProviderIDExists（AnyProviderIdEquals=tmdb:… 一次批量请求）
+  → sqlite 本人历史求剧（media_requests）→ 每条结果标记「已在库/已求剧/可求剧」
+
+提交 POST /portal/request → requests.Create
+  → tmdb.Details 回查权威条目（不信浏览器回传字段）
+  → emby 再验库存（存在则拒绝）→ sqlite UPSERT（同人同题唯一，驳回可重激活）
+
+后台 /admin/requests → requests.List/SetStatus/Delete（标记已入库/驳回、删除）
+```
+
+求剧记录在 SQLite 事务内落盘，不发起 Emby/TMDB 外部调用；Emby/TMDB 故障只影响当次搜索或提交，不阻塞其他功能。
+
 ## 外部集成
 
 | 集成 | 位置 | 说明 |
 | --- | --- | --- |
-| Emby 管理 API | `internal/emby` | 角色化小接口（`Authenticator`/`PolicyRestricter`/`UserLister`/`UserFinder`/`PasswordSetter`），10s 超时、禁止跟随重定向。 |
+| Emby 管理 API | `internal/emby` | 角色化小接口（`Authenticator`/`PolicyRestricter`/`UserLister`/`UserFinder`/`PasswordSetter`/`ProviderLibrary`），10s 超时、禁止跟随重定向。 |
+| TMDB API | `internal/tmdb` | 求剧搜索与详情回查（`search/multi`、`movie|tv/{id}`，zh-CN）；未配置 `ESP_TMDB_API_KEY` 时服务不可用，其余功能不受影响。 |
 | R Pay 支付中心 | `internal/paymentcenter` | 商户签名请求/回调验证/订单查询/取消；商户 Secret 经 `credentials` Vault 加密存储。 |
 
 ## 部署边界

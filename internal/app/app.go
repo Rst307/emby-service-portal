@@ -17,7 +17,9 @@ import (
 	"github.com/Rst307/emby-service-portal/internal/payments"
 	"github.com/Rst307/emby-service-portal/internal/persistence/sqlite"
 	"github.com/Rst307/emby-service-portal/internal/portal"
+	"github.com/Rst307/emby-service-portal/internal/requests"
 	"github.com/Rst307/emby-service-portal/internal/settings"
+	"github.com/Rst307/emby-service-portal/internal/tmdb"
 	"github.com/Rst307/emby-service-portal/internal/web"
 )
 
@@ -25,9 +27,11 @@ type Application struct {
 	store    *sqlite.Store
 	handler  http.Handler
 	Emby     emby.Client
+	TMDB     *tmdb.Client
 	expiry   *expiry.Runner
 	accounts *accounts.Service
 	payments *payments.Service
+	requests *requests.Service
 }
 
 func New(ctx context.Context, cfg config.Config) (*Application, error) {
@@ -52,6 +56,11 @@ func New(ctx context.Context, cfg config.Config) (*Application, error) {
 	inviteService := invites.New(store, accountService)
 	paymentService := payments.New(store, accountService, vault, paymentcenter.NewClient(nil))
 	portalService := portal.New(store, embyClient, cfg.SessionTTL)
+	tmdbClient := tmdb.NewClient(cfg.TmdbAPIKey)
+	if cfg.TmdbBaseURL != "" {
+		tmdbClient.SetBaseURL(cfg.TmdbBaseURL)
+	}
+	requestService := requests.New(store, tmdbClient, embyClient)
 	timeLocation, err := cfg.TimeLocation()
 	if err != nil {
 		return closeOnError(err)
@@ -60,11 +69,11 @@ func New(ctx context.Context, cfg config.Config) (*Application, error) {
 	if err := settingsService.Ensure(ctx); err != nil {
 		return closeOnError(fmt.Errorf("seed settings: %w", err))
 	}
-	webServer, err := web.New(authService, portalService, accountService, inviteService, paymentService, settingsService, cfg.APIKey, cfg.CookieSecure, cfg.SessionTTL, timeLocation)
+	webServer, err := web.New(authService, portalService, accountService, inviteService, paymentService, settingsService, requestService, tmdbClient, cfg.APIKey, cfg.CookieSecure, cfg.SessionTTL, timeLocation)
 	if err != nil {
 		return closeOnError(fmt.Errorf("configure web server: %w", err))
 	}
-	return &Application{store: store, handler: webServer.Handler(), Emby: embyClient, expiry: expiry.New(store, embyClient), accounts: accountService, payments: paymentService}, nil
+	return &Application{store: store, handler: webServer.Handler(), Emby: embyClient, TMDB: tmdbClient, expiry: expiry.New(store, embyClient), accounts: accountService, payments: paymentService, requests: requestService}, nil
 }
 
 func (a *Application) Handler() http.Handler               { return a.handler }

@@ -36,7 +36,7 @@ func (s *Server) portalDashboard(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/portal/login", http.StatusSeeOther)
 		return
 	}
-	s.templates.Render(w, "portal-dashboard", admin.ViewData{CSRFToken: csrfFromRequest(r), Account: account})
+	s.templates.Render(w, "portal-dashboard", admin.ViewData{CSRFToken: csrfFromRequest(r), Account: account, PortalActive: "subscription"})
 }
 func (s *Server) portalLogout(w http.ResponseWriter, r *http.Request) {
 	if !validCSRF(r) {

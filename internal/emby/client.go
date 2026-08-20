@@ -34,6 +34,13 @@ type UserLister interface {
 	ListUsers(ctx context.Context) ([]ManagedUser, error)
 }
 
+// ProviderLibrary reports which requested TMDB IDs are present in the Emby
+// library under the given media types. The media request feature relies on it
+// to mark search results that already exist.
+type ProviderLibrary interface {
+	AnyProviderIDExists(ctx context.Context, mediaTypes []string, tmdbIDs []int64) (map[string]bool, error)
+}
+
 // UserFinder is intentionally narrow: provisioning recovery only needs to
 // establish whether the exact requested name was created before a lost reply.
 type UserFinder interface {
@@ -129,6 +136,98 @@ func (c *HTTPClient) ListUsers(ctx context.Context) ([]ManagedUser, error) {
 		return nil, fmt.Errorf("decode Emby users: %w", err)
 	}
 	return users, nil
+}
+
+// AnyProviderIDExists reports which of the supplied TMDB IDs exist in the Emby
+// library under the given media types (e.g. Movie, Series). It issues one
+// request using Emby's AnyProviderIdEquals filter, so a search result set can
+// be marked against the live library without downloading the whole catalog.
+// The returned map keys are "<mediaType>:<tmdbID>" using each item's own type.
+func (c *HTTPClient) AnyProviderIDExists(ctx context.Context, mediaTypes []string, tmdbIDs []int64) (map[string]bool, error) {
+	matched := make(map[string]bool)
+	if len(tmdbIDs) == 0 {
+		return matched, nil
+	}
+	tokens := make([]string, 0, len(tmdbIDs))
+	tokenIDs := make(map[string]bool, len(tmdbIDs))
+	for _, id := range tmdbIDs {
+		tokens = append(tokens, fmt.Sprintf("tmdb:%d", id))
+		for _, mediaType := range mediaTypes {
+			tokenIDs[fmt.Sprintf("%s:%d", mediaType, id)] = true
+		}
+	}
+	endpoint := c.endpoint("Items")
+	query := endpoint.Query()
+	query.Set("Recursive", "true")
+	query.Set("IncludeItemTypes", strings.Join(mediaTypes, ","))
+	query.Set("AnyProviderIdEquals", strings.Join(tokens, ","))
+	query.Set("Fields", "ProviderIds")
+	query.Set("Limit", "200")
+	endpoint.RawQuery = query.Encode()
+	request, err := c.request(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	response, err := c.httpClient.Do(request)
+	if err != nil {
+		return nil, fmt.Errorf("check Emby library: %w", err)
+	}
+	items, err := decodeItemsWithProviderIDs(response)
+	if err != nil {
+		return nil, err
+	}
+	for _, item := range items {
+		mediaType := normalizeMediaType(item.Type)
+		key := fmt.Sprintf("%s:%s", mediaType, item.ProviderIDs["Tmdb"])
+		if tokenIDs[key] {
+			matched[key] = true
+		}
+	}
+	return matched, nil
+}
+
+// normalizeMediaType maps an Emby item type to the TMDB media-type vocabulary
+// used by the request records (Movie -> movie, Series -> tv).
+func normalizeMediaType(embyType string) string {
+	switch strings.ToLower(strings.TrimSpace(embyType)) {
+	case "series":
+		return "tv"
+	default:
+		return strings.ToLower(strings.TrimSpace(embyType))
+	}
+}
+
+// libraryItem is the minimal Emby item shape needed to build a provider-ID set.
+type libraryItem struct {
+	Type        string            `json:"Type"`
+	ProviderIDs map[string]string `json:"ProviderIds"`
+}
+
+// decodeItemsWithProviderIDs parses an Emby Items response. Emby returns a bare
+// array unless paging is requested; some versions wrap it as {"Items":[...]},
+// so both shapes are accepted.
+func decodeItemsWithProviderIDs(response *http.Response) ([]libraryItem, error) {
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return nil, fmt.Errorf("Emby library query returned HTTP %d", response.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(response.Body, 8<<20))
+	if err != nil {
+		return nil, fmt.Errorf("read Emby library response: %w", err)
+	}
+	// Emby returns a bare item array unless paging is requested; some versions
+	// wrap it as {"Items": [...]}. Try the wrapper first, then the array form.
+	var wrapped struct {
+		Items []libraryItem `json:"Items"`
+	}
+	if err := json.Unmarshal(body, &wrapped); err == nil && wrapped.Items != nil {
+		return wrapped.Items, nil
+	}
+	var items []libraryItem
+	if err := json.Unmarshal(body, &items); err != nil {
+		return nil, fmt.Errorf("decode Emby library response: %w", err)
+	}
+	return items, nil
 }
 
 func (c *HTTPClient) AuthenticateUser(ctx context.Context, username, password string) (User, error) {
