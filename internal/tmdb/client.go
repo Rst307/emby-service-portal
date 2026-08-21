@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -22,9 +23,48 @@ const (
 
 var ErrNotConfigured = errors.New("TMDB API key is not configured")
 
-// PosterBaseURL serves TMDB poster paths as absolute image URLs with a fixed
-// width (w342) that is readable in both card and table layouts.
-const PosterBaseURL = "https://image.tmdb.org/t/p/w342"
+// DefaultPosterBaseURL serves TMDB poster paths as absolute image URLs with a
+// fixed width (w342) readable in both card and table layouts. Deployments where
+// the public TMDB image CDN is unreachable override it with SetPosterBaseURL
+// (ESP_TMDB_IMAGE_BASE_URL).
+const DefaultPosterBaseURL = "https://image.tmdb.org/t/p/w342"
+
+// posterBase holds the runtime poster base URL. It is process-global so that
+// tmdb.PosterURL (used by template rendering) and the page Content-Security-
+// Policy share one value; it defaults to the public CDN and is swapped once at
+// startup from ESP_TMDB_IMAGE_BASE_URL.
+var posterBase atomic.Value // stores string
+
+func init() {
+	posterBase.Store(DefaultPosterBaseURL)
+}
+
+func currentPosterBase() string {
+	if value, ok := posterBase.Load().(string); ok && value != "" {
+		return value
+	}
+	return DefaultPosterBaseURL
+}
+
+// SetPosterBaseURL overrides the poster CDN used by PosterURL and the page CSP.
+// It accepts a TMDB-compatible image root (default https://image.tmdb.org/t/p/
+// w342) from a mirror such as a TMDB image reverse proxy.
+func SetPosterBaseURL(base string) {
+	base = strings.TrimRight(strings.TrimSpace(base), "/")
+	if base != "" {
+		posterBase.Store(base)
+	}
+}
+
+// PosterBaseHost returns the scheme://host of the configured poster CDN, for
+// inclusion in the page img-src Content-Security-Policy directive.
+func PosterBaseHost() string {
+	u, err := url.Parse(currentPosterBase())
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return DefaultPosterBaseURL
+	}
+	return u.Scheme + "://" + u.Host
+}
 
 // Result is one movie or TV show returned by a TMDB search or details lookup.
 // Field names reuse the shared surface across the two media types.
@@ -39,40 +79,103 @@ type Result struct {
 }
 
 // PosterURL builds an absolute poster URL from a stored poster path ("" when
-// the item has no artwork on TMDB).
+// the item has no artwork on TMDB). It renders through the configured poster
+// base so a deployment can substitute a reachable image mirror.
 func PosterURL(path string) string {
 	if strings.TrimSpace(path) == "" {
 		return ""
 	}
-	return PosterBaseURL + path
+	return currentPosterBase() + path
 }
 
 // Client queries the TMDB v3 API with a read access token or API key.
 type Client struct {
-	apiKey     string
-	baseURL    string
-	httpClient *http.Client
+	apiKey          string
+	baseURL         string
+	fallbackBaseURL string
+	timeout         time.Duration
+	proxyURL        *url.URL
+	httpClient      *http.Client
 }
 
 // tmdbBaseURL is the public TMDB API root. Tests override it with a stub.
 const tmdbBaseURL = "https://api.themoviedb.org/3"
 
+// defaultTimeout bounds each TMDB API request. Deployments behind slow or
+// congested links raise it via SetTimeout (ESP_TMDB_TIMEOUT) so a slow mirror
+// does not surface as "no results".
+const defaultTimeout = 10 * time.Second
+
 // NewClient returns a TMDB client. An empty apiKey leaves the client
 // unconfigured: Configured() reports false and searches fail with
 // ErrNotConfigured so deployments without TMDB can keep every other feature.
 func NewClient(apiKey string) *Client {
-	return &Client{
-		apiKey:     strings.TrimSpace(apiKey),
-		baseURL:    tmdbBaseURL,
-		httpClient: &http.Client{Timeout: 10 * time.Second},
+	c := &Client{
+		apiKey:  strings.TrimSpace(apiKey),
+		baseURL: tmdbBaseURL,
+		timeout: defaultTimeout,
 	}
+	c.rebuildHTTPClient()
+	return c
+}
+
+// rebuildHTTPClient wires the HTTP transport. By default the transport honors
+// the process HTTP(S)_PROXY environment variables; SetProxy forces a specific
+// proxy instead.
+func (c *Client) rebuildHTTPClient() {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = http.ProxyFromEnvironment
+	if c.proxyURL != nil {
+		transport.Proxy = http.ProxyURL(c.proxyURL)
+	}
+	c.httpClient = &http.Client{Transport: transport, Timeout: c.timeout}
+}
+
+// SetTimeout overrides the per-request timeout (default 10s).
+func (c *Client) SetTimeout(timeout time.Duration) {
+	if timeout <= 0 {
+		return
+	}
+	c.timeout = timeout
+	c.rebuildHTTPClient()
+}
+
+// SetProxy routes TMDB API requests through the given HTTP(S) or SOCKS5
+// proxy. This is how deployments where api.themoviedb.org is slow or
+// unreachable (e.g. mainland China) reach the API through a reachable proxy or
+// a local reverse proxy.
+func (c *Client) SetProxy(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("invalid TMDB proxy URL: %w", err)
+	}
+	switch strings.ToLower(u.Scheme) {
+	case "http", "https", "socks5", "socks5h":
+	default:
+		return fmt.Errorf("unsupported TMDB proxy scheme %q (want http, https or socks5)", u.Scheme)
+	}
+	c.proxyURL = u
+	c.rebuildHTTPClient()
+	return nil
 }
 
 func (c *Client) Configured() bool { return c.apiKey != "" }
 
 // SetBaseURL overrides the public TMDB endpoint. It exists for tests and for
-// deployments mirroring the TMDB API; production uses the public endpoint.
-func (c *Client) SetBaseURL(baseURL string) { c.baseURL = strings.TrimRight(baseURL, "/") }
+// deployments mirroring the TMDB API (e.g. ESP_TMDB_BASE_URL pointing at a
+// reachable mirror in mainland China). The official endpoint is kept as a
+// fallback: when a mirrored request fails it is retried once against it
+// through the same transport (proxy), so a flaky mirror degrades gracefully.
+func (c *Client) SetBaseURL(baseURL string) {
+	baseURL = strings.TrimRight(baseURL, "/")
+	if baseURL == "" || baseURL == tmdbBaseURL {
+		c.baseURL = tmdbBaseURL
+		c.fallbackBaseURL = ""
+		return
+	}
+	c.fallbackBaseURL = tmdbBaseURL
+	c.baseURL = baseURL
+}
 
 // SearchMulti returns movies and TV shows matching the query, localized to
 // Simplified Chinese where TMDB has translations.
@@ -194,6 +297,44 @@ func (c *Client) getJSON(ctx context.Context, endpoint string) ([]byte, error) {
 }
 
 func (c *Client) get(ctx context.Context, endpoint string) (int, []byte, error) {
+	status, body, err := c.do(ctx, endpoint)
+	if err == nil && status >= 200 && status < 300 {
+		return status, body, nil
+	}
+	// Mirror-first, official-fallback: when a mirror override is active and the
+	// mirrored call failed, retry against the official host so deployments can
+	// keep both a fast mirror and a proxied path to TMDB.
+	fallback := c.fallbackEndpoint(endpoint)
+	if fallback == "" {
+		return status, body, err
+	}
+	if fbStatus, fbBody, fbErr := c.do(ctx, fallback); fbErr == nil && fbStatus >= 200 && fbStatus < 500 {
+		return fbStatus, fbBody, nil
+	}
+	return status, body, err
+}
+
+// fallbackEndpoint rewrites an endpoint URL onto the official TMDB host when a
+// mirror override is active, or returns "" when there is nothing to fall back
+// to (no override configured).
+func (c *Client) fallbackEndpoint(endpoint string) string {
+	if c.baseURL == tmdbBaseURL || c.fallbackBaseURL == "" {
+		return ""
+	}
+	current, err := url.Parse(endpoint)
+	if err != nil {
+		return ""
+	}
+	official, err := url.Parse(c.fallbackBaseURL)
+	if err != nil {
+		return ""
+	}
+	current.Scheme = official.Scheme
+	current.Host = official.Host
+	return current.String()
+}
+
+func (c *Client) do(ctx context.Context, endpoint string) (int, []byte, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return 0, nil, fmt.Errorf("build TMDB request: %w", err)

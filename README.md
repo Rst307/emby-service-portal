@@ -83,6 +83,18 @@ go run ./cmd/emby-service-portal
 | `ESP_SESSION_TTL` | 否 | 会话有效期，默认 `24h`。 |
 | `ESP_TIME_ZONE` | 否 | 初始显示时区（首次启动写入设置，之后可在后台「设置」页随时切换），默认 `Asia/Shanghai`。所有页面展示的时间都会按此转换；数据库和 API 仍以 UTC/RFC3339 保存和返回。 |
 | `ESP_TMDB_API_KEY` | 否 | TMDB API Key，启用用户中心「求剧」功能；留空则求剧搜索不可用（后台仍可管理历史求剧记录）。 |
+| `ESP_TMDB_BASE_URL` | 否 | TMDB API 根地址（镜像/反代），默认 `https://api.themoviedb.org/3`。中国大陆网络下直连官方 API 常被限速或阻断，可指向可达的 TMDB API 镜像或自建反代（值需包含镜像实际服务的 `/3` 路径段）。设置后请求**先走镜像，镜像失败自动回退到官方端点**（经 `ESP_TMDB_HTTP_PROXY` 或环境代理）。 |
+| `ESP_TMDB_IMAGE_BASE_URL` | 否 | TMDB 海报 CDN 根地址，默认 `https://image.tmdb.org/t/p/w342`。「求剧」页海报由浏览器直接加载，官方图片 CDN 在国内同样难以访问，可指向可达的图片镜像/反代。 |
+| `ESP_TMDB_HTTP_PROXY` | 否 | TMDB API 请求使用的 HTTP(S)/SOCKS5 代理（服务端出网）。不设置时使用进程环境变量 `HTTP(S)_PROXY`；设置了则强制走该代理。 |
+| `ESP_TMDB_TIMEOUT` | 否 | 每次 TMDB API 请求超时，默认 `10s`。链路慢时可适当调大（如 `15s`），避免慢镜像被误报为“无结果”。 |
+
+#### 中国大陆网络加速求剧访问
+
+直连 `api.themoviedb.org`（搜索）与 `image.tmdb.org`（海报）在国内通常很慢且不稳定。**方案 A（镜像）与方案 B（代理）可以组合使用**，两者不冲突：配了镜像后求剧搜索先走镜像，镜像超时/失败时自动回退到“经代理访问官方端点”，互为兜底：
+
+- **方案 A（指向镜像/反代）**：`ESP_TMDB_BASE_URL=https://tmdb-api.mirror.example.com/3`、`ESP_TMDB_IMAGE_BASE_URL=https://tmdb-image.mirror.example.com/t/p/w342`。镜像需与 TMDB v3 API、图片路径兼容。
+- **方案 B（代理出网）**：`ESP_TMDB_HTTP_PROXY=http://127.0.0.1:7890`（HTTP 代理）或 `socks5://127.0.0.1:1080`，服务端通过代理访问官方 API，也是镜像失效时的兜底路径。注意海报是**浏览器**直接加载的：代理只解决服务端搜索，海报仍需镜像 `ESP_TMDB_IMAGE_BASE_URL` 或用户侧代理。
+- **方案 C（调大超时）**：`ESP_TMDB_TIMEOUT=15s` 避免慢链路被 10 秒默认超时截断返回空结果。
 
 生成随机密钥：
 

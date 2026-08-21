@@ -60,6 +60,15 @@ func New(ctx context.Context, cfg config.Config) (*Application, error) {
 	if cfg.TmdbBaseURL != "" {
 		tmdbClient.SetBaseURL(cfg.TmdbBaseURL)
 	}
+	if cfg.TmdbHTTPProxy != "" {
+		if err := tmdbClient.SetProxy(cfg.TmdbHTTPProxy); err != nil {
+			return closeOnError(fmt.Errorf("configure TMDB proxy: %w", err))
+		}
+	}
+	tmdbClient.SetTimeout(cfg.TmdbTimeout)
+	if cfg.TmdbImageBaseURL != "" {
+		tmdb.SetPosterBaseURL(cfg.TmdbImageBaseURL)
+	}
 	requestService := requests.New(store, tmdbClient, embyClient)
 	timeLocation, err := cfg.TimeLocation()
 	if err != nil {

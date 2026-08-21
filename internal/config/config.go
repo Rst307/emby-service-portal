@@ -26,9 +26,20 @@ type Config struct {
 	SessionTTL            time.Duration
 	TimeZone              string
 	TmdbAPIKey            string
-	// TmdbBaseURL overrides the public TMDB endpoint; it exists for tests and
-	// intentionally has no ESP_* environment binding.
+	// TmdbBaseURL overrides the public TMDB API root (default
+	// https://api.themoviedb.org/3). Point it at a reachable TMDB mirror or
+	// reverse proxy where the public host is slow or blocked (e.g. mainland
+	// China). The value must include the /3 path segment the mirror serves.
 	TmdbBaseURL string
+	// TmdbImageBaseURL overrides the poster CDN root (default
+	// https://image.tmdb.org/t/p/w342) used by rendered poster images and the
+	// page CSP, for browser networks that cannot reach the public TMDB CDN.
+	TmdbImageBaseURL string
+	// TmdbHTTPProxy routes TMDB API requests through an explicit HTTP(S) or
+	// SOCKS5 proxy instead of the process environment proxy.
+	TmdbHTTPProxy string
+	// TmdbTimeout bounds each TMDB API request (default 10s).
+	TmdbTimeout time.Duration
 }
 
 func FromEnv() (Config, error) {
@@ -37,6 +48,10 @@ func FromEnv() (Config, error) {
 		return Config{}, err
 	}
 	ttl, err := durationEnv("ESP_SESSION_TTL", 24*time.Hour)
+	if err != nil {
+		return Config{}, err
+	}
+	tmdbTimeout, err := durationEnv("ESP_TMDB_TIMEOUT", 10*time.Second)
 	if err != nil {
 		return Config{}, err
 	}
@@ -54,6 +69,10 @@ func FromEnv() (Config, error) {
 		SessionTTL:            ttl,
 		TimeZone:              value("ESP_TIME_ZONE", "Asia/Shanghai"),
 		TmdbAPIKey:            os.Getenv("ESP_TMDB_API_KEY"),
+		TmdbBaseURL:           os.Getenv("ESP_TMDB_BASE_URL"),
+		TmdbImageBaseURL:      os.Getenv("ESP_TMDB_IMAGE_BASE_URL"),
+		TmdbHTTPProxy:         os.Getenv("ESP_TMDB_HTTP_PROXY"),
+		TmdbTimeout:           tmdbTimeout,
 	}
 	return cfg, cfg.Validate()
 }
@@ -80,6 +99,33 @@ func (c Config) Validate() error {
 	}
 	if c.SessionTTL <= 0 {
 		return fmt.Errorf("ESP_SESSION_TTL must be positive")
+	}
+	for name, val := range map[string]string{
+		"ESP_TMDB_BASE_URL":       c.TmdbBaseURL,
+		"ESP_TMDB_IMAGE_BASE_URL": c.TmdbImageBaseURL,
+		"ESP_TMDB_HTTP_PROXY":     c.TmdbHTTPProxy,
+	} {
+		if val == "" {
+			continue
+		}
+		schemes := []string{"http", "https"}
+		if name == "ESP_TMDB_HTTP_PROXY" {
+			schemes = []string{"http", "https", "socks5", "socks5h"}
+		}
+		u, err := url.Parse(val)
+		if err != nil || u.Host == "" {
+			return fmt.Errorf("%s must be an absolute URL", name)
+		}
+		allowed := false
+		for _, scheme := range schemes {
+			if strings.EqualFold(u.Scheme, scheme) {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			return fmt.Errorf("%s must use one of %v", name, schemes)
+		}
 	}
 	if _, err := c.TimeLocation(); err != nil {
 		return err

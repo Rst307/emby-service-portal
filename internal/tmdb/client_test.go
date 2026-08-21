@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestSearchMultiParsesMoviesAndSeries(t *testing.T) {
@@ -111,5 +112,81 @@ func TestPosterURL(t *testing.T) {
 	}
 	if PosterURL("/abc.jpg") != "https://image.tmdb.org/t/p/w342/abc.jpg" {
 		t.Fatalf("unexpected poster URL %q", PosterURL("/abc.jpg"))
+	}
+}
+
+func TestPosterBaseURLOverridable(t *testing.T) {
+	defer SetPosterBaseURL("https://image.tmdb.org/t/p/w342")
+
+	SetPosterBaseURL("https://img.mirror.example.com/t/p/w342")
+	if got := PosterURL("/x.jpg"); got != "https://img.mirror.example.com/t/p/w342/x.jpg" {
+		t.Fatalf("overridden poster URL = %q", got)
+	}
+	if got := PosterBaseHost(); got != "https://img.mirror.example.com" {
+		t.Fatalf("PosterBaseHost = %q, want mirror host", got)
+	}
+}
+
+func TestSetProxyRejectsUnsupportedScheme(t *testing.T) {
+	client := NewClient("test-key")
+	if err := client.SetProxy("ftp://proxy.example.com:21"); err == nil {
+		t.Fatal("ftp proxy must be rejected")
+	}
+	if err := client.SetProxy("socks5://127.0.0.1:1080"); err != nil {
+		t.Fatalf("socks5 proxy must be accepted: %v", err)
+	}
+}
+
+func TestSetTimeoutPositiveOnly(t *testing.T) {
+	client := NewClient("test-key")
+	client.SetTimeout(0)
+	if client.timeout != defaultTimeout {
+		t.Fatalf("zero timeout must keep default, got %v", client.timeout)
+	}
+	client.SetTimeout(30 * time.Second)
+	if client.timeout != 30*time.Second {
+		t.Fatalf("timeout = %v, want 30s", client.timeout)
+	}
+}
+
+func TestSearchMultiFallsBackToOfficialWhenMirrorFails(t *testing.T) {
+	mirror := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/search/multi" {
+			t.Fatalf("unexpected mirror path %q", r.URL.Path)
+		}
+		http.Error(w, "upstream error", http.StatusInternalServerError)
+	}))
+	defer mirror.Close()
+
+	official := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/search/multi" {
+			t.Fatalf("unexpected official path %q", r.URL.Path)
+		}
+		payload := map[string]any{
+			"results": []map[string]any{
+				{"id": 157336, "media_type": "movie", "title": "星际穿越", "poster_path": "/x.jpg"},
+			},
+		}
+		_ = json.NewEncoder(w).Encode(payload)
+	}))
+	defer official.Close()
+
+	client := NewClient("test-key")
+	client.SetBaseURL(mirror.URL)
+	client.fallbackBaseURL = official.URL
+
+	results, err := client.SearchMulti(context.Background(), "星际穿越", 5)
+	if err != nil {
+		t.Fatalf("search should succeed via official fallback: %v", err)
+	}
+	if len(results) != 1 || results[0].ID != 157336 {
+		t.Fatalf("results = %+v, want the official record", results)
+	}
+}
+
+func TestNoFallbackWithoutMirrorOverride(t *testing.T) {
+	client := NewClient("test-key")
+	if got := client.fallbackEndpoint("https://api.themoviedb.org/3/search/multi?x=1"); got != "" {
+		t.Fatalf("fallback must be empty without a mirror override, got %q", got)
 	}
 }

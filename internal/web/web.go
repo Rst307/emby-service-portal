@@ -142,7 +142,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /renew", s.renew)
 	mux.HandleFunc("POST /renew/payment", s.renewPaymentCreate)
 	mux.HandleFunc("POST /admin/logout", s.logout)
-	return securityHeaders(s.limitBody(s.ensureCSRF(mux)))
+	return securityHeaders(tmdb.PosterBaseHost(), s.limitBody(s.ensureCSRF(mux)))
 }
 
 func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
@@ -292,7 +292,7 @@ func validCSRF(r *http.Request) bool {
 	form := r.Form.Get("csrf_token")
 	return len(form) == len(cookie.Value) && subtle.ConstantTimeCompare([]byte(form), []byte(cookie.Value)) == 1
 }
-func securityHeaders(next http.Handler) http.Handler {
+func securityHeaders(posterHost string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// HTML pages contain session-scoped state, CSRF tokens, or account data.
 		// Static asset handlers deliberately override this with their own cache policy.
@@ -301,11 +301,17 @@ func securityHeaders(next http.Handler) http.Handler {
 			http.Error(w, "security policy unavailable", http.StatusInternalServerError)
 			return
 		}
+		// TMDB posters load directly from the browser, so the configured poster
+		// CDN (default image.tmdb.org) must be allow-listed too.
+		imgSrc := "img-src 'self' data: https://image.tmdb.org"
+		if host := strings.TrimSpace(posterHost); host != "" && host != "https://image.tmdb.org" {
+			imgSrc += " " + host
+		}
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "same-origin")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'nonce-"+nonce+"' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://cloudflareinsights.com; img-src 'self' data: https://image.tmdb.org")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'nonce-"+nonce+"' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://cloudflareinsights.com; "+imgSrc)
 		next.ServeHTTP(w, r)
 	})
 }
