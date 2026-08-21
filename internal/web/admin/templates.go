@@ -177,6 +177,12 @@ func NewTemplates(location *time.Location) (*Templates, error) {
 				return status
 			}
 		},
+		"requestKindLabel": func(kind string) string {
+			if kind == domain.MediaRequestKindMissing {
+				return "催更"
+			}
+			return "求剧"
+		},
 		"mediaTypeLabel": func(mediaType string) string {
 			if mediaType == "tv" {
 				return "剧集"

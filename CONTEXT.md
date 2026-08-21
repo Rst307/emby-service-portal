@@ -52,4 +52,7 @@ _Avoid_: deletion, removal
 A request submitted through the 用户中心 for a movie or TV show not present in the Emby library, snapshotting the TMDB catalog record (title, TMDB id, media type). One 业务账号 can hold one request per TMDB title; an administrator marks it 已入库 or 已驳回, and a rejected request can be re-submitted.
 _Avoid_: media request ticket, suggestion
 
+**催更**:
+A 求剧 (kind `missing`) submitted through the 用户中心 for a 电视/动漫 already partly in the Emby library, snapshotting the exact missing-episode list (e.g. `S01E04、S01E05`). It is the same `media_requests` row as 求剧, distinguished by `kind`; a series with no missing aired episodes cannot be 催更'd and shows as 已在库.
+
 模块职责与数据归属见 `docs/DOMAIN.md`，架构决策见 `docs/adr/`。

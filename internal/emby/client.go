@@ -41,6 +41,20 @@ type ProviderLibrary interface {
 	AnyProviderIDExists(ctx context.Context, mediaTypes []string, tmdbIDs []int64) (map[string]bool, error)
 }
 
+// SeasonEpisodes is the per-series episode footprint Emby has collected, keyed
+// by season number. The request service compares it against the TMDB catalog
+// to compute missing episodes for the 催更 (nudge) workflow.
+type SeasonEpisodes struct {
+	// Seasons maps season number to the set of episode numbers collected.
+	Seasons map[int]map[int]bool
+}
+
+// EpisodeLibrary reports the episodes Emby has for a TV series identified by
+// its TMDB provider ID, together with whether the series exists at all.
+type EpisodeLibrary interface {
+	SeriesEpisodes(ctx context.Context, tmdbID int64) (SeasonEpisodes, bool, error)
+}
+
 // UserFinder is intentionally narrow: provisioning recovery only needs to
 // establish whether the exact requested name was created before a lost reply.
 type UserFinder interface {
@@ -221,6 +235,110 @@ func dedupeStrings(values []string) []string {
 		out = append(out, value)
 	}
 	return out
+}
+
+// SeriesEpisodes reports which episodes Emby has collected for a TV series
+// identified by its TMDB provider ID, and whether the series is present at all.
+func (c *HTTPClient) SeriesEpisodes(ctx context.Context, tmdbID int64) (SeasonEpisodes, bool, error) {
+	series, found, err := c.findSeriesByTmdb(ctx, tmdbID)
+	if err != nil {
+		return SeasonEpisodes{}, false, err
+	}
+	if !found {
+		return SeasonEpisodes{}, false, nil
+	}
+	endpoint := c.endpoint("Shows", series.ID, "Episodes")
+	request, err := c.request(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return SeasonEpisodes{}, false, err
+	}
+	response, err := c.httpClient.Do(request)
+	if err != nil {
+		return SeasonEpisodes{}, false, fmt.Errorf("query Emby series episodes: %w", err)
+	}
+	episodes := make(map[int]map[int]bool)
+	if err := decodeSeasonEpisodes(response, episodes); err != nil {
+		return SeasonEpisodes{}, false, err
+	}
+	return SeasonEpisodes{Seasons: episodes}, true, nil
+}
+
+// findSeriesByTmdb locates one Emby Series item by its TMDB provider ID.
+func (c *HTTPClient) findSeriesByTmdb(ctx context.Context, tmdbID int64) (struct{ ID string }, bool, error) {
+	endpoint := c.endpoint("Items")
+	query := endpoint.Query()
+	query.Set("Recursive", "true")
+	query.Set("IncludeItemTypes", "Series")
+	query.Set("AnyProviderIdEquals", fmt.Sprintf("tmdb.%d", tmdbID))
+	query.Set("Fields", "ProviderIds")
+	query.Set("Limit", "1")
+	endpoint.RawQuery = query.Encode()
+	request, err := c.request(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return struct{ ID string }{}, false, err
+	}
+	response, err := c.httpClient.Do(request)
+	if err != nil {
+		return struct{ ID string }{}, false, fmt.Errorf("find Emby series: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return struct{ ID string }{}, false, fmt.Errorf("find Emby series returned HTTP %d", response.StatusCode)
+	}
+	var wrapped struct {
+		Items []struct {
+			ID        string            `json:"Id"`
+			Type      string            `json:"Type"`
+			Providers map[string]string `json:"ProviderIds"`
+		} `json:"Items"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&wrapped); err != nil {
+		return struct{ ID string }{}, false, fmt.Errorf("decode Emby series lookup: %w", err)
+	}
+	for _, item := range wrapped.Items {
+		if renderID, ok := item.Providers["Tmdb"]; ok && renderID == fmt.Sprintf("%d", tmdbID) {
+			return struct{ ID string }{ID: item.ID}, true, nil
+		}
+	}
+	return struct{ ID string }{}, false, nil
+}
+
+// decodeSeasonEpisodes fills a season -> set(episode numbers) map from an Emby
+// /Shows/{id}/Episodes response (a bare array or a wrapped items list).
+func decodeSeasonEpisodes(response *http.Response, seasons map[int]map[int]bool) error {
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return fmt.Errorf("Emby series episodes returned HTTP %d", response.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(response.Body, 8<<20))
+	if err != nil {
+		return fmt.Errorf("read Emby series episodes response: %w", err)
+	}
+	var wrapped struct {
+		Items []struct {
+			SeasonNumber  int `json:"ParentIndexNumber"`
+			EpisodeNumber int `json:"IndexNumber"`
+		} `json:"Items"`
+	}
+	var items []struct {
+		SeasonNumber  int `json:"ParentIndexNumber"`
+		EpisodeNumber int `json:"IndexNumber"`
+	}
+	if err := json.Unmarshal(body, &wrapped); err == nil && wrapped.Items != nil {
+		items = wrapped.Items
+	} else if err := json.Unmarshal(body, &items); err != nil {
+		return fmt.Errorf("decode Emby series episodes response: %w", err)
+	}
+	for _, episode := range items {
+		if episode.SeasonNumber < 1 || episode.EpisodeNumber < 1 {
+			continue
+		}
+		if seasons[episode.SeasonNumber] == nil {
+			seasons[episode.SeasonNumber] = make(map[int]bool)
+		}
+		seasons[episode.SeasonNumber][episode.EpisodeNumber] = true
+	}
+	return nil
 }
 
 // normalizeMediaType maps an Emby item type to the TMDB media-type vocabulary

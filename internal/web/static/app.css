@@ -2078,6 +2078,10 @@ body.seerr:hover::-webkit-scrollbar-thumb { background-color: #6b7280; }
 }
 .request-media-copy { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
 .request-title { color: inherit; }
+.request-kind-row { display: inline-flex; align-items: center; gap: 6px; margin-top: 2px; }
+.request-episodes { font-size: 0.72rem; color: #d48806; }
+.admin-body .badge.request-kind { border-color: #91d5ff; background: #e6f7ff; color: #0958d9; }
+.admin-body .badge.request-kind-missing { border-color: #ffe58f; background: #fffbe6; color: #d48806; }
 .admin-body .badge.request-status-pending { border-color: #91d5ff; background: #e6f7ff; color: #0958d9; }
 .admin-body .badge.request-status-fulfilled { border-color: #b7eb8f; background: #f6ffed; color: #389e0d; }
 .admin-body .badge.request-status-rejected { border-color: #ffccc7; background: #fff1f0; color: #cf1322; }

@@ -14,8 +14,17 @@ const (
 	MediaRequestRejected  = "rejected"
 )
 
+// Request kinds distinguish an add-to-library request (full) from a nudge that
+// only asks to backfill missing episodes of a series that already exists
+// (missing).
+const (
+	MediaRequestKindFull    = "full"
+	MediaRequestKindMissing = "missing"
+)
+
 // MediaRequest records that a portal user asked for a movie or TV show to be
-// added to the Emby library. Title and provider fields are snapshotted at
+// added to the Emby library (Kind full) or for missing episodes of a series to
+// be backfilled (Kind missing). Title and provider fields are snapshotted at
 // request time so the record stays readable even if the upstream catalog
 // changes. One business account can request a given TMDB title only once; a
 // rejected request can be re-requested by reactivating the same row.
@@ -30,9 +39,13 @@ type MediaRequest struct {
 	Overview        string
 	PosterPath      string
 	ReleaseDate     string
-	Status          string
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	Kind            string // full | missing
+	// Episodes is the human-readable missing-episode summary for 催更
+	// (Kind missing), e.g. "S01E02 S01E04 · 第 2 季缺 2 集".
+	Episodes  string
+	Status    string
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // CreateMediaRequestInput carries the fields a portal user submits. The server
@@ -47,6 +60,8 @@ type CreateMediaRequestInput struct {
 	Overview        string
 	PosterPath      string
 	ReleaseDate     string
+	Kind            string // full | missing
+	Episodes        string
 	Now             time.Time
 }
 

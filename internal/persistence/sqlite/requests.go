@@ -14,8 +14,8 @@ import (
 // lets a user re-request a title that was previously rejected.
 func (s *Store) UpsertMediaRequest(ctx context.Context, input domain.CreateMediaRequestInput) (domain.MediaRequest, error) {
 	now := input.Now.UTC()
-	_, err := s.db.ExecContext(ctx, `INSERT INTO media_requests(account_id, account_username, tmdb_id, media_type, title, original_title, overview, poster_path, release_date, status, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+	_, err := s.db.ExecContext(ctx, `INSERT INTO media_requests(account_id, account_username, tmdb_id, media_type, title, original_title, overview, poster_path, release_date, kind, episodes, status, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
 ON CONFLICT(account_id, tmdb_id, media_type) DO UPDATE SET
   account_username = excluded.account_username,
   title = excluded.title,
@@ -23,10 +23,13 @@ ON CONFLICT(account_id, tmdb_id, media_type) DO UPDATE SET
   overview = excluded.overview,
   poster_path = excluded.poster_path,
   release_date = excluded.release_date,
+  kind = excluded.kind,
+  episodes = excluded.episodes,
   status = 'pending',
   updated_at = excluded.updated_at`,
 		input.AccountID, input.AccountUsername, input.TmdbID, input.MediaType,
 		input.Title, input.OriginalTitle, input.Overview, input.PosterPath, input.ReleaseDate,
+		input.Kind, input.Episodes,
 		timestamp(now), timestamp(now))
 	if err != nil {
 		return domain.MediaRequest{}, err
@@ -37,7 +40,7 @@ ON CONFLICT(account_id, tmdb_id, media_type) DO UPDATE SET
 // FindMediaRequestByAccountTmdb returns the current request row for one account
 // and TMDB title.
 func (s *Store) FindMediaRequestByAccountTmdb(ctx context.Context, accountID int64, tmdbID int64, mediaType string) (domain.MediaRequest, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT id, account_id, account_username, tmdb_id, media_type, title, original_title, overview, poster_path, release_date, status, created_at, updated_at
+	row := s.db.QueryRowContext(ctx, `SELECT id, account_id, account_username, tmdb_id, media_type, title, original_title, overview, poster_path, release_date, kind, episodes, status, created_at, updated_at
 FROM media_requests WHERE account_id = ? AND tmdb_id = ? AND media_type = ?`, accountID, tmdbID, mediaType)
 	return scanMediaRequest(row)
 }
@@ -94,7 +97,7 @@ func (s *Store) ListMediaRequests(ctx context.Context, filter domain.MediaReques
 	}
 	page.TotalPages = (total + filter.PageSize - 1) / filter.PageSize
 
-	query := `SELECT id, account_id, account_username, tmdb_id, media_type, title, original_title, overview, poster_path, release_date, status, created_at, updated_at
+	query := `SELECT id, account_id, account_username, tmdb_id, media_type, title, original_title, overview, poster_path, release_date, kind, episodes, status, created_at, updated_at
 FROM media_requests` + where + ` ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`
 	listArgs := append(append([]any{}, args...), filter.PageSize, (filter.Page-1)*filter.PageSize)
 	rows, err := s.db.QueryContext(ctx, query, listArgs...)
@@ -171,7 +174,7 @@ func scanMediaRequest(row mediaRequestScanner) (domain.MediaRequest, error) {
 	var created, updated string
 	err := row.Scan(&request.ID, &request.AccountID, &request.AccountUsername, &request.TmdbID, &request.MediaType,
 		&request.Title, &request.OriginalTitle, &request.Overview, &request.PosterPath, &request.ReleaseDate,
-		&request.Status, &created, &updated)
+		&request.Kind, &request.Episodes, &request.Status, &created, &updated)
 	if err != nil {
 		return domain.MediaRequest{}, err
 	}

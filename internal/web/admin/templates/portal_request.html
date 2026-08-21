@@ -68,7 +68,34 @@
           <div class="seerr-result-foot">
             <span class="seerr-id">TMDB #{{.ID}}</span>
             {{if .InLibrary}}
-              <span class="seerr-badge seerr-badge-inlib">已在库</span>
+              {{if .MissingEpisodes}}
+                {{/* 剧集已在库但缺集:提供催更;优先于已求过状态 */}}
+                {{if .AlreadyRequested}}
+                  {{if eq .RequestStatus "pending"}}<span class="seerr-badge">已催更 · 待处理</span>{{end}}
+                  {{if eq .RequestStatus "fulfilled"}}<span class="seerr-badge seerr-badge-inlib">已补齐</span>{{end}}
+                  {{if eq .RequestStatus "rejected"}}
+                    <span class="seerr-badge">{{.MissingEpisodes}} · 未处理</span>
+                    <form method="post" action="/portal/request" class="seerr-request-form">
+                      <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                      <input type="hidden" name="q" value="{{$.RequestQuery}}">
+                      <input type="hidden" name="media_type" value="{{.MediaType}}">
+                      <input type="hidden" name="tmdb_id" value="{{.ID}}">
+                      <button class="seerr-btn seerr-btn-primary" type="submit">再次催更</button>
+                    </form>
+                  {{end}}
+                {{else}}
+                  <span class="seerr-badge">{{.MissingEpisodes}} · 已在库</span>
+                  <form method="post" action="/portal/request" class="seerr-request-form">
+                    <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                    <input type="hidden" name="q" value="{{$.RequestQuery}}">
+                    <input type="hidden" name="media_type" value="{{.MediaType}}">
+                    <input type="hidden" name="tmdb_id" value="{{.ID}}">
+                    <button class="seerr-btn seerr-btn-primary" type="submit">催更</button>
+                  </form>
+                {{end}}
+              {{else}}
+                <span class="seerr-badge seerr-badge-inlib">已在库</span>
+              {{end}}
             {{else if .AlreadyRequested}}
               {{if eq .RequestStatus "pending"}}<span class="seerr-badge">已求剧 · 待处理</span>{{end}}
               {{if eq .RequestStatus "fulfilled"}}<span class="seerr-badge seerr-badge-inlib">已入库</span>{{end}}
@@ -103,6 +130,7 @@
       <h2 class="seerr-panel-title">求剧说明</h2>
       <ul class="seerr-help-list">
         <li>结果来自 TMDB 数据库；页面会按 TMDB 编号对照当前 Emby 库存，标记「已在库」的影视不需要再求剧。</li>
+        <li>电视剧/动漫若已在库但缺集，会显示「缺 N 集」并可用「催更」提交缺失的集次，管理员会补全后再标记已入库。</li>
         <li>提交后状态为「待处理」，管理员入库后会标记为「已入库」；如无法入库会标记为「已驳回」，届时你可以再次求剧。</li>
         <li>同一账号对同一部影视只会保留一条求剧记录。</li>
       </ul>

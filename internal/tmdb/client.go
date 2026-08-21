@@ -285,6 +285,85 @@ func (c *Client) Details(ctx context.Context, mediaType string, id int64) (Resul
 	return result, true, nil
 }
 
+// Season is one season's shape from the TMDB tv-details payload.
+type Season struct {
+	Number       int
+	EpisodeCount int
+	AirDate      string // empty for specials before any air date is known
+}
+
+// TVStructure is the season layout of a TV series, used to compare the TMDB
+// catalog against what Emby actually collected so missing episodes can be
+// reported for the 催更 (nudge) workflow.
+type TVStructure struct {
+	NumberOfSeasons int
+	Seasons         []Season
+}
+
+// TVStructure returns the season layout for one TV series from /tv/{id}. When
+// the title is not a series this still parses an empty structure.
+func (c *Client) TVStructure(ctx context.Context, id int64) (TVStructure, error) {
+	if !c.Configured() {
+		return TVStructure{}, ErrNotConfigured
+	}
+	endpoint := fmt.Sprintf("%s/tv/%d?api_key=%s&language=zh-CN", c.baseURL, id, url.QueryEscape(c.apiKey))
+	payload, err := c.getJSON(ctx, endpoint)
+	if err != nil {
+		return TVStructure{}, err
+	}
+	var body struct {
+		NumberOfSeasons int `json:"number_of_seasons"`
+		Seasons         []struct {
+			SeasonNumber int    `json:"season_number"`
+			EpisodeCount int    `json:"episode_count"`
+			AirDate      string `json:"air_date"`
+		} `json:"seasons"`
+	}
+	if err := json.Unmarshal(payload, &body); err != nil {
+		return TVStructure{}, fmt.Errorf("decode TMDB tv structure: %w", err)
+	}
+	structure := TVStructure{NumberOfSeasons: body.NumberOfSeasons}
+	structure.Seasons = make([]Season, 0, len(body.Seasons))
+	for _, season := range body.Seasons {
+		if season.SeasonNumber < 1 {
+			continue // skip specials (season 0)
+		}
+		structure.Seasons = append(structure.Seasons, Season{
+			Number: season.SeasonNumber, EpisodeCount: season.EpisodeCount,
+			AirDate: season.AirDate,
+		})
+	}
+	return structure, nil
+}
+
+// SeasonEpisodes returns the episode numbers of one season from
+// /tv/{id}/season/{season}. Specials are skipped.
+func (c *Client) SeasonEpisodes(ctx context.Context, id int64, season int) ([]int, error) {
+	if !c.Configured() {
+		return nil, ErrNotConfigured
+	}
+	endpoint := fmt.Sprintf("%s/tv/%d/season/%d?api_key=%s&language=zh-CN", c.baseURL, id, season, url.QueryEscape(c.apiKey))
+	payload, err := c.getJSON(ctx, endpoint)
+	if err != nil {
+		return nil, err
+	}
+	var body struct {
+		Episodes []struct {
+			EpisodeNumber int `json:"episode_number"`
+		} `json:"episodes"`
+	}
+	if err := json.Unmarshal(payload, &body); err != nil {
+		return nil, fmt.Errorf("decode TMDB season: %w", err)
+	}
+	numbers := make([]int, 0, len(body.Episodes))
+	for _, episode := range body.Episodes {
+		if episode.EpisodeNumber >= 1 {
+			numbers = append(numbers, episode.EpisodeNumber)
+		}
+	}
+	return numbers, nil
+}
+
 func (c *Client) getJSON(ctx context.Context, endpoint string) ([]byte, error) {
 	status, body, err := c.get(ctx, endpoint)
 	if err != nil {

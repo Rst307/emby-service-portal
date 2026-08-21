@@ -94,6 +94,10 @@
                   <strong class="request-title">{{.Title}}</strong>
                   <span class="subtle"><span class="kind-dot kind-{{.MediaType}}"></span>{{mediaTypeLabel .MediaType}}{{if .ReleaseDate}} · {{yearOnly .ReleaseDate}}{{end}}</span>
                   {{if and .OriginalTitle (ne .OriginalTitle .Title)}}<span class="subtle">{{.OriginalTitle}}</span>{{end}}
+                  <span class="request-kind-row">
+                    <span class="badge request-kind request-kind-{{.Kind}}">{{requestKindLabel .Kind}}</span>
+                    {{if .Episodes}}<span class="subtle request-episodes">{{.Episodes}}</span>{{end}}
+                  </span>
                 </div>
               </div>
             </td>

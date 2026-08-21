@@ -11,13 +11,17 @@ import (
 	"time"
 
 	"github.com/Rst307/emby-service-portal/internal/domain"
+	"github.com/Rst307/emby-service-portal/internal/emby"
 	"github.com/Rst307/emby-service-portal/internal/persistence/sqlite"
 	"github.com/Rst307/emby-service-portal/internal/tmdb"
 )
 
-// stubEmby is a deterministic ProviderLibrary for tests.
+// stubEmby is a deterministic ProviderLibrary and EpisodeLibrary for tests.
 type stubEmby struct {
 	present map[string]bool
+	// episodes keys a tmdbID by season number to the set of episode numbers
+	// Emby has collected; nil means the series exists with no recorded episodes.
+	episodes map[int64]map[int]map[int]bool
 }
 
 func (s *stubEmby) AnyProviderIDExists(_ context.Context, mediaTypes []string, ids []int64) (map[string]bool, error) {
@@ -31,6 +35,16 @@ func (s *stubEmby) AnyProviderIDExists(_ context.Context, mediaTypes []string, i
 		}
 	}
 	return result, nil
+}
+
+func (s *stubEmby) SeriesEpisodes(_ context.Context, tmdbID int64) (emby.SeasonEpisodes, bool, error) {
+	if !s.present[fmt.Sprintf("tv:%d", tmdbID)] {
+		return emby.SeasonEpisodes{}, false, nil
+	}
+	if seasons, ok := s.episodes[tmdbID]; ok {
+		return emby.SeasonEpisodes{Seasons: seasons}, true, nil
+	}
+	return emby.SeasonEpisodes{Seasons: map[int]map[int]bool{}}, true, nil
 }
 
 // tmdbStub serves canned /search/multi and /movie|tv/{id} responses. The movie
@@ -52,7 +66,19 @@ func tmdbStub(t *testing.T, movieInLibrary int64) *httptest.Server {
 		case strings.HasSuffix(r.URL.Path, "/movie/157336"):
 			_ = writeJSON(w, map[string]any{"id": 157336, "title": "星际穿越", "original_title": "Interstellar", "overview": "你好", "poster_path": "/a.jpg", "release_date": "2014-11-05"})
 		case strings.HasSuffix(r.URL.Path, "/tv/1399"):
-			_ = writeJSON(w, map[string]any{"id": 1399, "name": "权力的游戏", "original_name": "Game of Thrones", "overview": "七国", "poster_path": "/b.jpg", "first_air_date": "2011-04-17"})
+			_ = writeJSON(w, map[string]any{
+				"id": 1399, "name": "权力的游戏", "original_name": "Game of Thrones", "overview": "七国", "poster_path": "/b.jpg", "first_air_date": "2011-04-17",
+				"number_of_seasons": 1,
+				"seasons": []map[string]any{{
+					"season_number": 1, "episode_count": 5, "air_date": "2011-04-17",
+				}},
+			})
+		case strings.HasSuffix(r.URL.Path, "/tv/1399/season/1"):
+			_ = writeJSON(w, map[string]any{
+				"episodes": []map[string]any{
+					{"episode_number": 1}, {"episode_number": 2}, {"episode_number": 3}, {"episode_number": 4}, {"episode_number": 5},
+				},
+			})
 		case r.URL.Path == "/movie/"+fmt.Sprint(movieInLibrary):
 			_ = writeJSON(w, map[string]any{"id": movieInLibrary, "title": "已在库电影", "original_title": "InLibrary"})
 		default:
@@ -178,6 +204,74 @@ func TestCreateRejectsInLibraryAndReactivatesRejected(t *testing.T) {
 	}
 	if _, err := service.Create(ctx, account, "tv", 9999999); err == nil {
 		t.Fatal("missing TMDB record must fail")
+	}
+}
+
+func TestSeriesMissingEpisodesProduceMissingEpisodesMarkAndNudge(t *testing.T) {
+	emby := &stubEmby{
+		present: map[string]bool{"tv:1399": true},
+		episodes: map[int64]map[int]map[int]bool{
+			1399: {1: {1: true, 2: true, 3: true}},
+		},
+	}
+	server := tmdbStub(t, 11111)
+	defer server.Close()
+	service, _, account := newTestService(t, emby, server)
+	ctx := context.Background()
+
+	// Season 1 has 5 aired episodes on TMDB but Emby only collected 1-3, so
+	// search must annotate the series as "缺 2 集" instead of plain 已在库.
+	items, err := service.Search(ctx, account.ID, "星际穿越", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var series *SearchItem
+	for i := range items {
+		if items[i].ID == 1399 {
+			series = &items[i]
+		}
+	}
+	if series == nil {
+		t.Fatal("series 1399 not in results")
+	}
+	if !series.InLibrary {
+		t.Fatal("series present in Emby must be marked InLibrary")
+	}
+	if series.MissingEpisodes != "缺 2 集" {
+		t.Fatalf("MissingEpisodes = %q, want 缺 2 集", series.MissingEpisodes)
+	}
+
+	// Submitting creates a 催更 (missing) record with the exact episode list.
+	created, err := service.Create(ctx, account, "tv", 1399)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.Kind != domain.MediaRequestKindMissing {
+		t.Fatalf("kind = %q, want missing", created.Kind)
+	}
+	if created.Episodes != "S01E04、S01E05" {
+		t.Fatalf("episodes = %q, want S01E04、S01E05", created.Episodes)
+	}
+	if created.Status != domain.MediaRequestPending {
+		t.Fatalf("status = %q, want pending", created.Status)
+	}
+}
+
+func TestCreateRejectsCompleteInLibrarySeries(t *testing.T) {
+	// Emby has all five aired episodes of season 1, so a nudge request is
+	// rejected just like an in-library movie.
+	emby := &stubEmby{
+		present: map[string]bool{"tv:1399": true},
+		episodes: map[int64]map[int]map[int]bool{
+			1399: {1: {1: true, 2: true, 3: true, 4: true, 5: true}},
+		},
+	}
+	server := tmdbStub(t, 11111)
+	defer server.Close()
+	service, _, account := newTestService(t, emby, server)
+
+	if _, err := service.Create(context.Background(), account, "tv", 1399); err != domain.ErrRequestInLibrary {
+		t.Fatalf("complete series create error = %v, want ErrRequestInLibrary", err)
 	}
 }
 
