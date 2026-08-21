@@ -308,7 +308,7 @@ func (c *HTTPClient) findSeriesByTmdb(ctx context.Context, tmdbID int64) (struct
 func decodeSeasonEpisodes(response *http.Response, seasons map[int]map[int]bool) error {
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return fmt.Errorf("Emby series episodes returned HTTP %d", response.StatusCode)
+		return fmt.Errorf("emby series episodes returned HTTP %d", response.StatusCode)
 	}
 	body, err := io.ReadAll(io.LimitReader(response.Body, 8<<20))
 	if err != nil {
