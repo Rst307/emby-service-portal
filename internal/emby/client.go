@@ -148,10 +148,13 @@ func (c *HTTPClient) AnyProviderIDExists(ctx context.Context, mediaTypes []strin
 	if len(tmdbIDs) == 0 {
 		return matched, nil
 	}
+	// Emby expects the AnyProviderIdEquals form "prov.id", e.g. "tmdb.155"
+	// (dot-separated). A colon form is not matched, silently producing empty
+	// results — the root cause of titles showing as absent when they exist.
 	tokens := make([]string, 0, len(tmdbIDs))
 	tokenIDs := make(map[string]bool, len(tmdbIDs))
 	for _, id := range tmdbIDs {
-		tokens = append(tokens, fmt.Sprintf("tmdb:%d", id))
+		tokens = append(tokens, fmt.Sprintf("tmdb.%d", id))
 		for _, mediaType := range mediaTypes {
 			tokenIDs[fmt.Sprintf("%s:%d", mediaType, id)] = true
 		}
@@ -159,7 +162,7 @@ func (c *HTTPClient) AnyProviderIDExists(ctx context.Context, mediaTypes []strin
 	endpoint := c.endpoint("Items")
 	query := endpoint.Query()
 	query.Set("Recursive", "true")
-	query.Set("IncludeItemTypes", strings.Join(mediaTypes, ","))
+	query.Set("IncludeItemTypes", strings.Join(embyItemTypes(mediaTypes), ","))
 	query.Set("AnyProviderIdEquals", strings.Join(tokens, ","))
 	query.Set("Fields", "ProviderIds")
 	query.Set("Limit", "200")
@@ -184,6 +187,40 @@ func (c *HTTPClient) AnyProviderIDExists(ctx context.Context, mediaTypes []strin
 		}
 	}
 	return matched, nil
+}
+
+// embyItemTypes maps TMDB-vocabulary media types to the Emby BaseItemKind
+// names the IncludeItemTypes filter matches on (Movie, Series).
+func embyItemTypes(tmdbTypes []string) []string {
+	types := make([]string, 0, len(tmdbTypes))
+	for _, mediaType := range tmdbTypes {
+		switch strings.ToLower(strings.TrimSpace(mediaType)) {
+		case "tv":
+			types = append(types, "Series")
+		case "movie":
+			types = append(types, "Movie")
+		default:
+			types = append(types, strings.TrimSpace(mediaType))
+		}
+	}
+	if len(types) == 0 {
+		types = []string{"Movie", "Series"}
+	}
+	return dedupeStrings(types)
+}
+
+func dedupeStrings(values []string) []string {
+	seen := make(map[string]bool, len(values))
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		key := strings.ToLower(strings.TrimSpace(value))
+		if key == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, value)
+	}
+	return out
 }
 
 // normalizeMediaType maps an Emby item type to the TMDB media-type vocabulary
