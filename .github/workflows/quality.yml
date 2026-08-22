@@ -55,13 +55,20 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - name: Fetch repository tags
+        run: git fetch --tags --force origin
+      - name: Determine next release version
+        run: |
+          LATEST_TAG="$(git tag -l 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1 || true)"
+          NEXT_VERSION="$(printf '%s\n' "$LATEST_TAG" | awk -F. '{print $1 "." $2 "." ($3 + 1)}')"
+          if [ -z "$NEXT_VERSION" ]; then NEXT_VERSION="v1.0.0"; fi
+          echo "NEXT_VERSION=$NEXT_VERSION" >> "$GITHUB_ENV"
+          echo "Latest stable tag: ${LATEST_TAG:-<none>} -> next release: $NEXT_VERSION"
       - name: Build executable
-        env:
-          RELEASE_TAG: v0.0.0-build.${{ github.run_id }}
         run: |
           mkdir -p dist
           go build -trimpath -buildvcs=false \
-            -ldflags="-s -w -X github.com/Rst307/emby-service-portal/internal/buildinfo.Version=$RELEASE_TAG -X github.com/Rst307/emby-service-portal/internal/buildinfo.Commit=${GITHUB_SHA::7}" \
+            -ldflags="-s -w -X github.com/Rst307/emby-service-portal/internal/buildinfo.Version=$NEXT_VERSION -X github.com/Rst307/emby-service-portal/internal/buildinfo.Commit=${GITHUB_SHA::7}" \
             -o dist/emby-service-portal-linux-amd64 ./cmd/emby-service-portal
           chmod 0755 dist/emby-service-portal-linux-amd64
           sha256sum dist/emby-service-portal-linux-amd64 \
@@ -90,13 +97,20 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - name: Fetch repository tags
+        run: git fetch --tags --force origin
+      - name: Determine next release version
+        run: |
+          LATEST_TAG="$(git tag -l 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1 || true)"
+          NEXT_VERSION="$(printf '%s\n' "$LATEST_TAG" | awk -F. '{print $1 "." $2 "." ($3 + 1)}')"
+          if [ -z "$NEXT_VERSION" ]; then NEXT_VERSION="v1.0.0"; fi
+          echo "NEXT_VERSION=$NEXT_VERSION" >> "$GITHUB_ENV"
+          echo "Latest stable tag: ${LATEST_TAG:-<none>} -> next release: $NEXT_VERSION"
       - name: Build executable
-        env:
-          RELEASE_TAG: v0.0.0-build.${{ github.run_id }}
         run: |
           mkdir -p dist
           go build -trimpath -buildvcs=false \
-            -ldflags="-s -w -X github.com/Rst307/emby-service-portal/internal/buildinfo.Version=$RELEASE_TAG -X github.com/Rst307/emby-service-portal/internal/buildinfo.Commit=${GITHUB_SHA::7}" \
+            -ldflags="-s -w -X github.com/Rst307/emby-service-portal/internal/buildinfo.Version=$NEXT_VERSION -X github.com/Rst307/emby-service-portal/internal/buildinfo.Commit=${GITHUB_SHA::7}" \
             -o dist/emby-service-portal-windows-amd64.exe ./cmd/emby-service-portal
           sha256sum dist/emby-service-portal-windows-amd64.exe \
             > dist/emby-service-portal-windows-amd64.exe.sha256
@@ -118,6 +132,16 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v5
+      - name: Fetch repository tags
+        run: git fetch --tags --force origin
+      - name: Determine next release version
+        run: |
+          LATEST_TAG="$(git tag -l 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1 || true)"
+          NEXT_VERSION="$(printf '%s\n' "$LATEST_TAG" | awk -F. '{print $1 "." $2 "." ($3 + 1)}')"
+          if [ -z "$NEXT_VERSION" ]; then NEXT_VERSION="v1.0.0"; fi
+          echo "NEXT_VERSION=$NEXT_VERSION" >> "$GITHUB_ENV"
+          echo "Latest stable tag: ${LATEST_TAG:-<none>} -> next release: $NEXT_VERSION"
       - name: Download Linux executable
         uses: actions/download-artifact@v8
         with:
@@ -131,15 +155,13 @@ jobs:
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: v0.0.0-build.${{ github.run_id }}
         run: |
-          gh release create "$RELEASE_TAG" \
+          gh release create "$NEXT_VERSION" \
             dist/emby-service-portal-linux-amd64 \
             dist/emby-service-portal-linux-amd64.sha256 \
             dist/emby-service-portal-windows-amd64.exe \
             dist/emby-service-portal-windows-amd64.exe.sha256 \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "Emby Service Portal $RELEASE_TAG" \
-            --prerelease \
+            --title "Emby Service Portal $NEXT_VERSION" \
             --generate-notes

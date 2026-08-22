@@ -118,7 +118,7 @@ ESP_CREDENTIAL_PREVIOUS_MASTER_KEY=旧的主密钥
 
 ## Linux / systemd 部署
 
-每次代码推送到 `main` 后，GitHub Actions 会自动生成静态 Linux amd64 与 Windows amd64 可执行文件，并创建一个带构建编号的 GitHub 预发布 Release。直接在仓库的 [Releases](https://github.com/Rst307/emby-service-portal/releases) 页面下载最新版本；每个 Release 同时包含可执行文件和对应的 SHA-256 校验文件。Pull Request 只执行检查，不会发布 Release；也可以在 Actions 页面通过 **Run workflow** 手动构建并发布。
+每次代码推送到 `main` 后，GitHub Actions 会自动生成静态 Linux amd64 与 Windows amd64 可执行文件，并把当前最高正式版标签的补丁位 +1 发布为一个新的正式 Release（如 v1.0.0 → v1.0.1）。直接在仓库的 [Releases](https://github.com/Rst307/emby-service-portal/releases) 页面下载最新版本；每个 Release 同时包含可执行文件和对应的 SHA-256 校验文件。Pull Request 只执行检查，不会发布 Release；也可以在 Actions 页面通过 **Run workflow** 手动构建并发布。
 ### Docker 运行
 
 镜像为多阶段构建的静态二进制 + Alpine 运行层（含 CA 证书和 IANA 时区数据），以非 root 用户运行：
@@ -156,7 +156,7 @@ sudo systemctl status emby-service-portal
 
 ## 自更新（系统设置 → 系统更新）
 
-程序内置更新检测与安装：后台周期性查询 GitHub Releases，找出非草稿的最新发布（含预发布构建，本项目每合并一次 `main` 就发布一个），按平台匹配安装包（`linux-amd64` / `windows-amd64.exe`），下载时先与 Release 附带的 `.sha256` 校验和比对，一致后才替换程序并重启。
+程序内置更新检测与安装：后台周期性查询 GitHub Releases，找出非草稿的最新发布（本项目每合并一次 `main`，CI 就从当前正式版递增发布一个补丁版），按平台匹配安装包（`linux-amd64` / `windows-amd64.exe`），下载时先与 Release 附带的 `.sha256` 校验和比对，一致后才替换程序并重启。
 
 - **检测**：默认每 6 小时一次（`ESP_UPDATE_INTERVAL`），也可在后台点「立即检测」。检测结果缓存在内存中，管理后台显示当前版本、最新版本、发布时间与更新说明。
 - **手动更新**：后台「立即更新」按钮下载 → 校验 → 替换 → 自动重启，期间服务中断约 5–10 秒。
