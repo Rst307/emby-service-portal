@@ -125,14 +125,45 @@
     {{end}}
     {{end}}
 
+    {{if .MyRequests}}
+    <section class="seerr-panel seerr-history-panel reveal" style="--d:.08s">
+      <div class="seerr-history-head">
+        <div>
+          <p class="seerr-eyebrow">MY REQUESTS</p>
+          <h2 class="seerr-panel-title">我的求剧记录</h2>
+        </div>
+        <span class="seerr-badge">{{len .MyRequests}} 条</span>
+      </div>
+      <ul class="seerr-history-list">
+        {{range .MyRequests}}
+        <li class="seerr-history-item">
+          <div class="seerr-history-main">
+            <strong class="seerr-history-title">{{.Title}}</strong>
+            <p class="seerr-history-meta">
+              <span class="seerr-tag">{{mediaTypeLabel .MediaType}}</span>
+              <span class="seerr-mute">TMDB #{{.TmdbID}}</span>
+              <span class="seerr-mute">{{formatTime .CreatedAt "2006-01-02"}}</span>
+              {{if eq .Kind "missing"}}<span class="seerr-mute">催更 {{.Episodes}}</span>{{end}}
+              {{if gt (len .Requesters) 1}}<span class="seerr-mute">共 {{len .Requesters}} 人求剧</span>{{end}}
+            </p>
+          </div>
+          {{if eq .Status "pending"}}<span class="seerr-badge">未处理</span>{{end}}
+          {{if eq .Status "fulfilled"}}<span class="seerr-badge seerr-badge-inlib">已处理</span>{{end}}
+          {{if eq .Status "rejected"}}<span class="seerr-badge seerr-badge-rejected">被驳回</span>{{end}}
+        </li>
+        {{end}}
+      </ul>
+    </section>
+    {{end}}
+
     <section class="seerr-panel reveal" style="--d:.14s">
       <p class="seerr-eyebrow">HELP</p>
       <h2 class="seerr-panel-title">求剧说明</h2>
       <ul class="seerr-help-list">
         <li>结果来自 TMDB 数据库；页面会按 TMDB 编号对照当前 Emby 库存，标记「已在库」的影视不需要再求剧。</li>
         <li>电视剧/动漫若已在库但缺集，会显示「缺 N 集」并可用「催更」提交缺失的集次，管理员会补全后再标记已入库。</li>
-        <li>提交后状态为「待处理」，管理员入库后会标记为「已入库」；如无法入库会标记为「已驳回」，届时你可以再次求剧。</li>
-        <li>同一账号对同一部影视只会保留一条求剧记录。</li>
+        <li>提交后状态为「待处理」（我的求剧记录里显示「未处理」），管理员入库后标记为「已处理」；如无法入库会标记为「被驳回」，届时你可以再次求剧。</li>
+        <li>同一部影视多人求剧会合并为一条记录，状态共享：管理员处理一次，所有求剧用户都能看到结果。</li>
       </ul>
     </section>
   </main>

@@ -23,6 +23,12 @@ func (s *Server) portalRequestPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data := admin.ViewData{CSRFToken: csrfFromRequest(r), Account: account, PortalActive: "request"}
+	myRequests, err := s.requests.MyRequests(r.Context(), account.ID)
+	if err != nil {
+		data.Error = "加载求剧记录失败，请稍后重试。"
+	} else {
+		data.MyRequests = myRequests
+	}
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	if query != "" {
 		data.RequestQuery = query

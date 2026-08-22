@@ -2058,8 +2058,25 @@ body.seerr:hover::-webkit-scrollbar-thumb { background-color: #6b7280; }
 .seerr-result-foot { margin-top: auto; display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; }
 .seerr-id { font-size: 0.74rem; color: var(--s-500); letter-spacing: 0.02em; }
 .seerr-badge-inlib { border-color: rgba(16, 185, 129, 0.45); background: rgba(16, 185, 129, 0.14); color: var(--s-green-400); }
+.seerr-badge-rejected { border-color: rgba(239, 68, 68, 0.5); background: rgba(239, 68, 68, 0.14); color: var(--s-red-400); }
 .seerr-request-form { margin-left: auto; }
 .seerr-request-form .seerr-btn { padding: 0.38rem 1.1rem; font-size: 0.8rem; }
+
+.seerr-history-panel { padding-bottom: 1.4rem; }
+.seerr-history-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 0.9rem; }
+.seerr-history-head .seerr-panel-title { margin-bottom: 0; }
+.seerr-history-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.55rem; }
+.seerr-history-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  padding: 0.75rem 1rem; border: 1px solid var(--s-700); border-radius: 12px;
+  background: rgba(255, 255, 255, 0.025);
+}
+.seerr-history-item + .seerr-history-item { margin-top: 0.55rem; }
+.seerr-history-main { min-width: 0; }
+.seerr-history-title { font-size: 0.95rem; color: var(--s-100); }
+.seerr-history-meta { margin: 0.28rem 0 0; display: flex; flex-wrap: wrap; gap: 0.45rem 0.9rem; align-items: center; }
+.seerr-history-meta .seerr-tag { font-size: 0.72rem; }
+.seerr-history-item .seerr-badge { flex-shrink: 0; }
 
 .seerr-help-list { margin: 0.6rem 0 0; padding-left: 1.1rem; display: grid; gap: 0.4rem; }
 .seerr-help-list li { font-size: 0.84rem; color: var(--s-400); line-height: 1.6; }

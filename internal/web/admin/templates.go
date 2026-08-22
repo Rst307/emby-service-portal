@@ -62,6 +62,7 @@ type ViewData struct {
 	SearchResults      []requests.SearchItem
 	RequestQuery       string
 	TmdbConfigured     bool
+	MyRequests         []domain.MediaRequest
 	RequestEnabled     bool
 	MediaRequests      []domain.MediaRequest
 	RequestTotal       int
@@ -203,6 +204,18 @@ func NewTemplates(location *time.Location) (*Templates, error) {
 				return "已入库"
 			case "rejected":
 				return "已驳回"
+			default:
+				return status
+			}
+		},
+		"portalRequestStatusLabel": func(status string) string {
+			switch status {
+			case "pending":
+				return "未处理"
+			case "fulfilled":
+				return "已处理"
+			case "rejected":
+				return "被驳回"
 			default:
 				return status
 			}

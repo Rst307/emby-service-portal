@@ -5,6 +5,7 @@ package requests
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -24,6 +25,10 @@ type EmbyLibrary interface {
 	emby.ProviderLibrary
 	emby.EpisodeLibrary
 }
+
+// ErrTitleNotFound reports that TMDB has no matching catalog entry for the
+// requested tmdb_id/media_type combination.
+var ErrTitleNotFound = errors.New("TMDB 中没有找到对应的影视条目")
 
 // Service orchestrates search, availability marking, and request lifecycle.
 type Service struct {
@@ -114,6 +119,11 @@ func (s *Service) Search(ctx context.Context, accountID int64, query string, lim
 // the catalog record from TMDB by media type and ID (client-supplied values are
 // not trusted), verifies the title is not already in the library, then upserts
 // the request row. A previously rejected request is reactivated.
+// Create records a media request for the given account and TMDB title. The
+// server re-fetches catalog details from TMDB (never trusting client values)
+// and re-checks the Emby library: a movie already in the library is rejected,
+// a series already present may become a 催更 (missing-episodes) request.
+// Requests aggregate per title — a new requester joins the existing row.
 func (s *Service) Create(ctx context.Context, account domain.Account, mediaType string, tmdbID int64) (domain.MediaRequest, error) {
 	if s.tmdb == nil || !s.tmdb.Configured() {
 		return domain.MediaRequest{}, tmdb.ErrNotConfigured
@@ -123,7 +133,7 @@ func (s *Service) Create(ctx context.Context, account domain.Account, mediaType 
 		return domain.MediaRequest{}, err
 	}
 	if !found {
-		return domain.MediaRequest{}, fmt.Errorf("TMDB 中没有找到对应的影视条目")
+		return domain.MediaRequest{}, ErrTitleNotFound
 	}
 	input := domain.CreateMediaRequestInput{
 		AccountID: account.ID, AccountUsername: account.Username,
@@ -162,6 +172,12 @@ func (s *Service) Create(ctx context.Context, account domain.Account, mediaType 
 		return domain.MediaRequest{}, fmt.Errorf("保存求剧记录失败：%w", err)
 	}
 	return request, nil
+}
+
+// MyRequests returns the requests one account took part in (portal
+// 我的求剧记录), newest requester activity first.
+func (s *Service) MyRequests(ctx context.Context, accountID int64) ([]domain.MediaRequest, error) {
+	return s.store.MyMediaRequests(ctx, accountID)
 }
 
 // missingEpisodeCount returns how many aired episodes of a series that already

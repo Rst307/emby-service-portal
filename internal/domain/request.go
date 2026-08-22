@@ -22,34 +22,43 @@ const (
 	MediaRequestKindMissing = "missing"
 )
 
-// MediaRequest records that a portal user asked for a movie or TV show to be
+// MediaRequest records that portal users asked for a movie or TV show to be
 // added to the Emby library (Kind full) or for missing episodes of a series to
 // be backfilled (Kind missing). Title and provider fields are snapshotted at
 // request time so the record stays readable even if the upstream catalog
-// changes. One business account can request a given TMDB title only once; a
-// rejected request can be re-requested by reactivating the same row.
+// changes. A request is aggregate per TMDB title: multiple users asking for
+// the same title share one row (Requesters) and the lifecycle status applies
+// to the whole request; a rejected request can be re-opened by any requester.
 type MediaRequest struct {
-	ID              int64
-	AccountID       int64
-	AccountUsername string
-	TmdbID          int64
-	MediaType       string // movie | tv
-	Title           string
-	OriginalTitle   string
-	Overview        string
-	PosterPath      string
-	ReleaseDate     string
-	Kind            string // full | missing
+	ID            int64
+	TmdbID        int64
+	MediaType     string // movie | tv
+	Title         string
+	OriginalTitle string
+	Overview      string
+	PosterPath    string
+	ReleaseDate   string
+	Kind          string // full | missing
 	// Episodes is the human-readable missing-episode summary for 催更
 	// (Kind missing), e.g. "S01E02 S01E04 · 第 2 季缺 2 集".
-	Episodes  string
-	Status    string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	Episodes   string
+	Status     string
+	Requesters []MediaRequester
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
+// MediaRequester is one business account that asked for the title, in request
+// order. Users are denormalized by username so renames do not rewrite history.
+type MediaRequester struct {
+	AccountID       int64
+	AccountUsername string
+	CreatedAt       time.Time
 }
 
 // CreateMediaRequestInput carries the fields a portal user submits. The server
-// re-fetches catalog details from TMDB rather than trusting client values.
+// re-fetches catalog details from TMDB rather than trusting client values;
+// AccountID/AccountUsername identify the requester joining the aggregate.
 type CreateMediaRequestInput struct {
 	AccountID       int64
 	AccountUsername string
@@ -69,6 +78,7 @@ type CreateMediaRequestInput struct {
 type MediaRequestFilter struct {
 	Query    string
 	Status   string
+	TmdbID   int64 // exact TMDB id match, 0 disables the filter
 	Page     int
 	PageSize int
 }

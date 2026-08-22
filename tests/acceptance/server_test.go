@@ -244,7 +244,7 @@ func TestBatchAccountExpiryManagement(t *testing.T) {
 
 	response = get(t, client, server.URL+"/admin/accounts")
 	page := body(t, response)
-	if !strings.Contains(page, "account-batch") || !strings.Contains(page, "batch-select") || !strings.Contains(page, "data-batch-status-filter") || !strings.Contains(page, "data-batch-select-status") || !strings.Contains(page, "app.js?v=5") {
+	if !strings.Contains(page, "account-batch") || !strings.Contains(page, "batch-select") || !strings.Contains(page, "data-batch-status-filter") || !strings.Contains(page, "data-batch-select-status") || !strings.Contains(page, "app.js?v=6") {
 		t.Fatalf("batch controls absent: %s", page)
 	}
 	response = postForm(t, client, server.URL+"/admin/accounts/batch", url.Values{"account_id": {"1:1"}, "action": {"extend"}, "duration": {"2"}, "duration_unit": {"day"}, "csrf_token": {csrf(t, page)}})
@@ -652,7 +652,7 @@ func TestAdminPagesLoadTheServedStylesheet(t *testing.T) {
 	server := httptest.NewServer(application.Handler())
 	defer server.Close()
 	response := get(t, http.DefaultClient, server.URL+"/admin/login")
-	if !strings.Contains(body(t, response), `href="/static/app.css"`) {
+	if !strings.Contains(body(t, response), `href="/static/app.css?v=6"`) {
 		t.Fatal("login page does not load the stylesheet")
 	}
 	response = get(t, http.DefaultClient, server.URL+"/static/app.css")

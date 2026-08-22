@@ -127,6 +127,15 @@ func TestMediaRequestFlow(t *testing.T) {
 		t.Fatalf("own request not marked on search page: %s", searchPage)
 	}
 
+	// The portal now shows the own request history with an 未处理 badge.
+	response = get(t, client, server.URL+"/portal/request")
+	historyPage := body(t, response)
+	for _, marker := range []string{"我的求剧记录", "权力的游戏", "未处理", "1 条"} {
+		if !strings.Contains(historyPage, marker) {
+			t.Fatalf("portal history missing %q: %s", marker, historyPage)
+		}
+	}
+
 	// Administrator sees the request with user, title and TMDB id.
 	adminJar, _ := cookiejar.New(nil)
 	adminClient := &http.Client{Jar: adminJar, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
@@ -152,5 +161,12 @@ func TestMediaRequestFlow(t *testing.T) {
 	response = get(t, adminClient, server.URL+"/admin/requests")
 	if !strings.Contains(body(t, response), "已入库") {
 		t.Fatalf("fulfilled request not marked: %s", body(t, response))
+	}
+
+	// The portal history reflects the fulfilled status.
+	response = get(t, client, server.URL+"/portal/request")
+	afterPage := body(t, response)
+	if !strings.Contains(afterPage, "已处理") {
+		t.Fatalf("portal history not marked fulfilled: %s", afterPage)
 	}
 }

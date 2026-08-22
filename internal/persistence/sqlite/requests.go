@@ -9,15 +9,17 @@ import (
 	"github.com/Rst307/emby-service-portal/internal/domain"
 )
 
-// UpsertMediaRequest records a media request, reactivating a previous request
-// for the same account and TMDB title when one already exists. Reactivation
-// lets a user re-request a title that was previously rejected.
+// UpsertMediaRequest records a media request aggregated per TMDB title: the
+// first requester creates the row, further requesters of the same title join
+// the existing row's requester list. A submission reactivates the request
+// (status back to pending) so a rejected title can be re-requested. Callers
+// with no business account (AccountID < 1, e.g. workflow submissions) record
+// the title without attaching a requester.
 func (s *Store) UpsertMediaRequest(ctx context.Context, input domain.CreateMediaRequestInput) (domain.MediaRequest, error) {
 	now := input.Now.UTC()
-	_, err := s.db.ExecContext(ctx, `INSERT INTO media_requests(account_id, account_username, tmdb_id, media_type, title, original_title, overview, poster_path, release_date, kind, episodes, status, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
-ON CONFLICT(account_id, tmdb_id, media_type) DO UPDATE SET
-  account_username = excluded.account_username,
+	_, err := s.db.ExecContext(ctx, `INSERT INTO media_requests(tmdb_id, media_type, title, original_title, overview, poster_path, release_date, kind, episodes, status, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+ON CONFLICT(tmdb_id, media_type) DO UPDATE SET
   title = excluded.title,
   original_title = excluded.original_title,
   overview = excluded.overview,
@@ -27,29 +29,50 @@ ON CONFLICT(account_id, tmdb_id, media_type) DO UPDATE SET
   episodes = excluded.episodes,
   status = 'pending',
   updated_at = excluded.updated_at`,
-		input.AccountID, input.AccountUsername, input.TmdbID, input.MediaType,
+		input.TmdbID, input.MediaType,
 		input.Title, input.OriginalTitle, input.Overview, input.PosterPath, input.ReleaseDate,
 		input.Kind, input.Episodes,
 		timestamp(now), timestamp(now))
 	if err != nil {
 		return domain.MediaRequest{}, err
 	}
-	return s.FindMediaRequestByAccountTmdb(ctx, input.AccountID, input.TmdbID, input.MediaType)
+	var requestID int64
+	if err := s.db.QueryRowContext(ctx, `SELECT id FROM media_requests WHERE tmdb_id = ? AND media_type = ?`, input.TmdbID, input.MediaType).Scan(&requestID); err != nil {
+		return domain.MediaRequest{}, err
+	}
+	if input.AccountID > 0 {
+		if _, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO media_request_users(media_request_id, account_id, account_username, created_at) VALUES (?, ?, ?, ?)`,
+			requestID, input.AccountID, input.AccountUsername, timestamp(now)); err != nil {
+			return domain.MediaRequest{}, err
+		}
+	}
+	return s.FindMediaRequestByTmdb(ctx, input.TmdbID, input.MediaType)
 }
 
-// FindMediaRequestByAccountTmdb returns the current request row for one account
-// and TMDB title.
-func (s *Store) FindMediaRequestByAccountTmdb(ctx context.Context, accountID int64, tmdbID int64, mediaType string) (domain.MediaRequest, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT id, account_id, account_username, tmdb_id, media_type, title, original_title, overview, poster_path, release_date, kind, episodes, status, created_at, updated_at
-FROM media_requests WHERE account_id = ? AND tmdb_id = ? AND media_type = ?`, accountID, tmdbID, mediaType)
-	return scanMediaRequest(row)
+// FindMediaRequestByTmdb returns the aggregated request row (with its
+// requester list) for one TMDB title.
+func (s *Store) FindMediaRequestByTmdb(ctx context.Context, tmdbID int64, mediaType string) (domain.MediaRequest, error) {
+	row := s.db.QueryRowContext(ctx, `SELECT id, tmdb_id, media_type, title, original_title, overview, poster_path, release_date, kind, episodes, status, created_at, updated_at
+FROM media_requests WHERE tmdb_id = ? AND media_type = ?`, tmdbID, mediaType)
+	request, err := scanMediaRequest(row)
+	if err != nil {
+		return domain.MediaRequest{}, err
+	}
+	requesters, err := s.loadRequesters(ctx, []int64{request.ID})
+	if err != nil {
+		return domain.MediaRequest{}, err
+	}
+	request.Requesters = requesters[request.ID]
+	return request, nil
 }
 
-// ListMediaRequestsForAccount returns every request row of one account keyed by
-// "mediaType:tmdbID" so search results can mark titles the user already asked
-// for, together with each row's status.
+// ListMediaRequestsForAccount returns every request status of one account keyed
+// by "mediaType:tmdbID" so search results can mark titles the user already
+// asked for.
 func (s *Store) ListMediaRequestsForAccount(ctx context.Context, accountID int64) (map[string]string, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT media_type, tmdb_id, status FROM media_requests WHERE account_id = ?`, accountID)
+	rows, err := s.db.QueryContext(ctx, `SELECT m.media_type, m.tmdb_id, m.status
+FROM media_request_users u JOIN media_requests m ON m.id = u.media_request_id
+WHERE u.account_id = ?`, accountID)
 	if err != nil {
 		return nil, err
 	}
@@ -67,6 +90,42 @@ func (s *Store) ListMediaRequestsForAccount(ctx context.Context, accountID int64
 	return result, rows.Err()
 }
 
+// MyMediaRequests returns the aggregated requests one account took part in,
+// newest requester activity first, for the portal 我的求剧记录 section.
+func (s *Store) MyMediaRequests(ctx context.Context, accountID int64) ([]domain.MediaRequest, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT m.id, m.tmdb_id, m.media_type, m.title, m.original_title, m.overview, m.poster_path, m.release_date, m.kind, m.episodes, m.status, m.created_at, m.updated_at
+FROM media_request_users u JOIN media_requests m ON m.id = u.media_request_id
+WHERE u.account_id = ? ORDER BY u.created_at DESC, m.id DESC LIMIT 50`, accountID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	requests := make([]domain.MediaRequest, 0)
+	ids := make([]int64, 0)
+	for rows.Next() {
+		request, err := scanMediaRequest(rows)
+		if err != nil {
+			return nil, err
+		}
+		requests = append(requests, request)
+		ids = append(ids, request.ID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(requests) == 0 {
+		return requests, nil
+	}
+	requesters, err := s.loadRequesters(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	for i := range requests {
+		requests[i].Requesters = requesters[requests[i].ID]
+	}
+	return requests, nil
+}
+
 // ListMediaRequests returns a bounded, filterable slice of media requests with
 // pending/fulfilled totals for the current filter.
 func (s *Store) ListMediaRequests(ctx context.Context, filter domain.MediaRequestFilter) (domain.MediaRequestPage, error) {
@@ -76,7 +135,7 @@ func (s *Store) ListMediaRequests(ctx context.Context, filter domain.MediaReques
 	if filter.PageSize < 1 || filter.PageSize > 100 {
 		filter.PageSize = 20
 	}
-	where, args := mediaRequestClause(filter.Status, filter.Query)
+	where, args := mediaRequestClause(filter.Status, filter.Query, filter.TmdbID)
 	base := ` FROM media_requests` + where
 
 	var total int
@@ -86,8 +145,8 @@ func (s *Store) ListMediaRequests(ctx context.Context, filter domain.MediaReques
 	page := domain.MediaRequestPage{Requests: nil, Total: total, Page: filter.Page, PageSize: filter.PageSize}
 	if filter.Status == "" {
 		// Unfiltered view keeps actionable summary counts beside the list.
-		pendingWhere, pendingArgs := mediaRequestClause(domain.MediaRequestPending, filter.Query)
-		fulfilledWhere, fulfilledArgs := mediaRequestClause(domain.MediaRequestFulfilled, filter.Query)
+		pendingWhere, pendingArgs := mediaRequestClause(domain.MediaRequestPending, filter.Query, filter.TmdbID)
+		fulfilledWhere, fulfilledArgs := mediaRequestClause(domain.MediaRequestFulfilled, filter.Query, filter.TmdbID)
 		if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM media_requests`+pendingWhere, pendingArgs...).Scan(&page.Pending); err != nil {
 			return domain.MediaRequestPage{}, err
 		}
@@ -97,7 +156,7 @@ func (s *Store) ListMediaRequests(ctx context.Context, filter domain.MediaReques
 	}
 	page.TotalPages = (total + filter.PageSize - 1) / filter.PageSize
 
-	query := `SELECT id, account_id, account_username, tmdb_id, media_type, title, original_title, overview, poster_path, release_date, kind, episodes, status, created_at, updated_at
+	query := `SELECT id, tmdb_id, media_type, title, original_title, overview, poster_path, release_date, kind, episodes, status, created_at, updated_at
 FROM media_requests` + where + ` ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`
 	listArgs := append(append([]any{}, args...), filter.PageSize, (filter.Page-1)*filter.PageSize)
 	rows, err := s.db.QueryContext(ctx, query, listArgs...)
@@ -106,31 +165,82 @@ FROM media_requests` + where + ` ORDER BY created_at DESC, id DESC LIMIT ? OFFSE
 	}
 	defer rows.Close()
 	requests := make([]domain.MediaRequest, 0)
+	ids := make([]int64, 0)
 	for rows.Next() {
 		request, err := scanMediaRequest(rows)
 		if err != nil {
 			return domain.MediaRequestPage{}, err
 		}
 		requests = append(requests, request)
+		ids = append(ids, request.ID)
 	}
 	if err := rows.Err(); err != nil {
 		return domain.MediaRequestPage{}, err
+	}
+	if len(requests) > 0 {
+		requesters, err := s.loadRequesters(ctx, ids)
+		if err != nil {
+			return domain.MediaRequestPage{}, err
+		}
+		for i := range requests {
+			requests[i].Requesters = requesters[requests[i].ID]
+		}
 	}
 	page.Requests = requests
 	return page, nil
 }
 
+// loadRequesters loads the requester list of every given request in request
+// order, keyed by media request id.
+func (s *Store) loadRequesters(ctx context.Context, requestIDs []int64) (map[int64][]domain.MediaRequester, error) {
+	result := make(map[int64][]domain.MediaRequester, len(requestIDs))
+	if len(requestIDs) == 0 {
+		return result, nil
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(requestIDs)), ",")
+	args := make([]any, 0, len(requestIDs))
+	for _, id := range requestIDs {
+		args = append(args, id)
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT media_request_id, account_id, account_username, created_at
+FROM media_request_users WHERE media_request_id IN (`+placeholders+`) ORDER BY created_at ASC, account_id ASC`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var requestID int64
+		var requester domain.MediaRequester
+		var created string
+		if err := rows.Scan(&requestID, &requester.AccountID, &requester.AccountUsername, &created); err != nil {
+			return nil, err
+		}
+		if requester.CreatedAt, err = parseTimestamp(created); err != nil {
+			return nil, err
+		}
+		result[requestID] = append(result[requestID], requester)
+	}
+	return result, rows.Err()
+}
+
 // mediaRequestClause builds the WHERE clause (with leading " WHERE") and its
-// arguments for a status-filtered, keyword-filtered request list.
-func mediaRequestClause(status, query string) (string, []any) {
-	clauses := make([]string, 0, 2)
-	args := make([]any, 0, 2)
+// arguments for a status-filtered, keyword-filtered request list. The keyword
+// matches the title, the original title, the requester usernames, or the TMDB
+// id.
+func mediaRequestClause(status, query string, tmdbID int64) (string, []any) {
+	clauses := make([]string, 0, 3)
+	args := make([]any, 0, 3)
 	if status = strings.TrimSpace(status); status != "" {
 		clauses = append(clauses, "status = ?")
 		args = append(args, status)
 	}
+	if tmdbID > 0 {
+		clauses = append(clauses, "tmdb_id = ?")
+		args = append(args, tmdbID)
+	}
 	if query = strings.TrimSpace(query); query != "" {
-		clauses = append(clauses, "(title LIKE ? OR original_title LIKE ? OR account_username LIKE ? OR CAST(tmdb_id AS TEXT) LIKE ?)")
+		clauses = append(clauses, `(title LIKE ? OR original_title LIKE ? OR CAST(tmdb_id AS TEXT) LIKE ?
+  OR EXISTS (SELECT 1 FROM media_request_users u WHERE u.media_request_id = media_requests.id AND u.account_username LIKE ?))`)
 		like := "%" + query + "%"
 		args = append(args, like, like, like, like)
 	}
@@ -172,7 +282,7 @@ type mediaRequestScanner interface{ Scan(...any) error }
 func scanMediaRequest(row mediaRequestScanner) (domain.MediaRequest, error) {
 	var request domain.MediaRequest
 	var created, updated string
-	err := row.Scan(&request.ID, &request.AccountID, &request.AccountUsername, &request.TmdbID, &request.MediaType,
+	err := row.Scan(&request.ID, &request.TmdbID, &request.MediaType,
 		&request.Title, &request.OriginalTitle, &request.Overview, &request.PosterPath, &request.ReleaseDate,
 		&request.Kind, &request.Episodes, &request.Status, &created, &updated)
 	if err != nil {

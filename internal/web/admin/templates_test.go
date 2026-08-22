@@ -368,13 +368,18 @@ func TestRenderAdminRequestsShowsRecordsAndActions(t *testing.T) {
 	templates.Render(response, "requests", ViewData{
 		CSRFToken: "csrf", RequestEnabled: true,
 		MediaRequests: []domain.MediaRequest{
-			{ID: 7, AccountUsername: "alice", AccountID: 1, TmdbID: 157336, MediaType: "movie", Title: "星际穿越", OriginalTitle: "Interstellar", PosterPath: "/a.jpg", ReleaseDate: "2014-11-05", Status: "pending", CreatedAt: time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)},
-			{ID: 8, AccountUsername: "bob", AccountID: 2, TmdbID: 1399, MediaType: "tv", Title: "权力的游戏", Status: "fulfilled", CreatedAt: time.Date(2030, 1, 2, 0, 0, 0, 0, time.UTC)},
+			{ID: 7, TmdbID: 157336, MediaType: "movie", Title: "星际穿越", OriginalTitle: "Interstellar", PosterPath: "/a.jpg", ReleaseDate: "2014-11-05", Status: "pending", Requesters: []domain.MediaRequester{
+				{AccountID: 1, AccountUsername: "alice", CreatedAt: time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)},
+				{AccountID: 3, AccountUsername: "carol", CreatedAt: time.Date(2030, 1, 3, 0, 0, 0, 0, time.UTC)},
+			}, CreatedAt: time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)},
+			{ID: 8, TmdbID: 1399, MediaType: "tv", Title: "权力的游戏", Status: "fulfilled", Requesters: []domain.MediaRequester{
+				{AccountID: 2, AccountUsername: "bob", CreatedAt: time.Date(2030, 1, 2, 0, 0, 0, 0, time.UTC)},
+			}, CreatedAt: time.Date(2030, 1, 2, 0, 0, 0, 0, time.UTC)},
 		},
 		RequestTotal: 2, RequestPending: 1, RequestFulfilled: 1, RequestPage: 1, RequestPageSize: 20, RequestTotalPages: 1,
 	})
 	page := response.Body.String()
-	for _, marker := range []string{"求剧管理", "星际穿越", "Interstellar", "alice", "bob", "TMDB 编号", "#157336", "themoviedb.org/movie/157336", "待处理", "已入库", "标记已入库", "驳回", "删除", "确认删除这条求剧记录？", "求剧总数", "查询求剧"} {
+	for _, marker := range []string{"求剧管理", "星际穿越", "Interstellar", "alice", "carol", "bob", "共 2 人求剧", "TMDB 编号", "#157336", "themoviedb.org/movie/157336", "待处理", "已入库", "标记已入库", "驳回", "删除", "确认删除这条求剧记录？", "求剧总数", "查询求剧"} {
 		if !strings.Contains(page, marker) {
 			t.Fatalf("requests page missing %q: %s", marker, page)
 		}

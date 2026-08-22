@@ -33,3 +33,14 @@ curl -X POST http://localhost:8080/api/v1/invites \
 ```
 
 A renewal always uses `original_expiry + duration_minutes`, even if that resulting date is still in the past.
+
+## Media requests (求剧)
+
+Request records aggregate per TMDB title: multiple users asking for the same movie/series share one record, and the lifecycle status (pending/fulfilled/rejected) applies to the whole record. Each record carries the `requesters` list and a `requester_count`.
+
+- `GET /api/v1/requests` — query params: `status` (`pending`\|`fulfilled`\|`rejected`, empty = all), `tmdb_id` (exact match, useful for workflow dedupe), `q` (title / original title / requester username / tmdb id substring), `page` (1-based), `page_size` (default 20, max 100)
+
+  Response: `{ "requests": [{ "id", "requesters": [{ "account_id", "account_username", "created_at" }], "requester_count", "tmdb_id", "media_type", "title", "original_title", "overview", "poster_path", "release_date", "kind", "episodes", "status", "created_at", "updated_at" }], "total", "pending", "fulfilled", "page", "page_size", "total_pages" }`
+- `POST /api/v1/requests` — `{ "media_type": "movie"\|"tv", "tmdb_id": 157336, "account_id": 0 }`; the server re-fetches catalog details from TMDB and checks the Emby library (movie already in library → `409`, TMDB entry missing → `404`, TMDB not configured → `503`). `account_id` is optional attribution; when provided it must reference an existing business account (otherwise `400`) and the account joins the record as a requester. Re-submitting an existing title joins the requester list and resets the status to pending.
+- `POST /api/v1/requests/{id}/fulfill` — mark 已入库 (closes the workflow loop after the media is added)
+- `POST /api/v1/requests/{id}/reject` — mark 已驳回; unknown id → `404`

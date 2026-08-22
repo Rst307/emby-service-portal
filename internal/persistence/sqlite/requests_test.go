@@ -42,6 +42,9 @@ func TestUpsertMediaRequestCreatesAndReactivates(t *testing.T) {
 	if created.Status != domain.MediaRequestPending || created.Title != "星际穿越" || created.TmdbID != 157336 {
 		t.Fatalf("created = %+v", created)
 	}
+	if len(created.Requesters) != 1 || created.Requesters[0].AccountUsername != "alice" || created.Requesters[0].AccountID != account.ID {
+		t.Fatalf("created requesters = %+v", created.Requesters)
+	}
 
 	// Re-submission must reactivate the same row rather than inserting a new one.
 	if err := store.SetMediaRequestStatus(ctx, created.ID, domain.MediaRequestRejected, now.Add(time.Hour)); err != nil {
@@ -54,7 +57,7 @@ func TestUpsertMediaRequestCreatesAndReactivates(t *testing.T) {
 		t.Fatal(err)
 	}
 	if reactivated.ID != created.ID {
-		t.Fatalf("reactivated id = %d, want %d (unique per account+tmdb)", reactivated.ID, created.ID)
+		t.Fatalf("reactivated id = %d, want %d (unique per tmdb+type)", reactivated.ID, created.ID)
 	}
 	if reactivated.Status != domain.MediaRequestPending || reactivated.Title != "星际穿越 4K" {
 		t.Fatalf("reactivated = %+v", reactivated)
@@ -62,13 +65,47 @@ func TestUpsertMediaRequestCreatesAndReactivates(t *testing.T) {
 	if !reactivated.UpdatedAt.After(reactivated.CreatedAt) {
 		t.Fatalf("updated_at did not advance: %s > %s", reactivated.UpdatedAt, reactivated.CreatedAt)
 	}
+	if len(reactivated.Requesters) != 1 {
+		t.Fatalf("requester count = %d, want 1 after resubmission", len(reactivated.Requesters))
+	}
 
-	var count int
-	if err := store.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM media_requests WHERE account_id = ?", account.ID).Scan(&count); err != nil {
+	// A second user asking for the same title joins the existing row.
+	bob := testAccount(t, ctx, store, "bob", now)
+	bobInput := input
+	bobInput.AccountID = bob.ID
+	bobInput.AccountUsername = bob.Username
+	bobInput.Now = now.Add(3 * time.Hour)
+	joined, err := store.UpsertMediaRequest(ctx, bobInput)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if count != 1 {
-		t.Fatalf("row count = %d, want 1", count)
+	if joined.ID != created.ID {
+		t.Fatalf("joined id = %d, want %d (aggregate per tmdb+type)", joined.ID, created.ID)
+	}
+	if len(joined.Requesters) != 2 || joined.Requesters[0].AccountUsername != "alice" || joined.Requesters[1].AccountUsername != "bob" {
+		t.Fatalf("joined requesters = %+v", joined.Requesters)
+	}
+
+	var rows, users int
+	if err := store.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM media_requests WHERE tmdb_id = 157336").Scan(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM media_request_users WHERE media_request_id = ?", created.ID).Scan(&users); err != nil {
+		t.Fatal(err)
+	}
+	if rows != 1 || users != 2 {
+		t.Fatalf("rows = %d, users = %d, want 1/2", rows, users)
+	}
+
+	// Submissions without a business account (workflow) record no requester.
+	anonymous, err := store.UpsertMediaRequest(ctx, domain.CreateMediaRequestInput{
+		TmdbID: 1399, MediaType: "tv", Title: "权力的游戏", Now: now.Add(4 * time.Hour),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(anonymous.Requesters) != 0 || anonymous.Status != domain.MediaRequestPending {
+		t.Fatalf("anonymous = %+v", anonymous)
 	}
 }
 
@@ -95,11 +132,12 @@ func TestListMediaRequestsFiltersAndCounts(t *testing.T) {
 	}
 	first := makeRequest(alice, 157336, "movie", "星际穿越", now)
 	second := makeRequest(alice, 1399, "tv", "权力的游戏", now.Add(time.Minute))
+	// bob asking for the same movie joins alice's row instead of creating a new one.
 	third := makeRequest(bob, 157336, "movie", "星际穿越", now.Add(2*time.Minute))
-	if err := store.SetMediaRequestStatus(ctx, second.ID, domain.MediaRequestFulfilled, now.Add(3*time.Minute)); err != nil {
-		t.Fatal(err)
+	if third.ID != first.ID {
+		t.Fatalf("aggregate id = %d, want %d", third.ID, first.ID)
 	}
-	if err := store.SetMediaRequestStatus(ctx, third.ID, domain.MediaRequestRejected, now.Add(4*time.Minute)); err != nil {
+	if err := store.SetMediaRequestStatus(ctx, second.ID, domain.MediaRequestFulfilled, now.Add(3*time.Minute)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -107,15 +145,20 @@ func TestListMediaRequestsFiltersAndCounts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if page.Total != 3 || page.Pending != 1 || page.Fulfilled != 1 {
-		t.Fatalf("unfiltered counts = total %d pending %d fulfilled %d, want 3/1/1", page.Total, page.Pending, page.Fulfilled)
+	if page.Total != 2 || page.Pending != 1 || page.Fulfilled != 1 {
+		t.Fatalf("unfiltered counts = total %d pending %d fulfilled %d, want 2/1/1", page.Total, page.Pending, page.Fulfilled)
 	}
-	if len(page.Requests) != 3 {
-		t.Fatalf("requests = %d, want 3", len(page.Requests))
+	if len(page.Requests) != 2 {
+		t.Fatalf("requests = %d, want 2", len(page.Requests))
 	}
-	// Ordered newest first: bob's request is at id 3 and newest.
-	if page.Requests[0].ID != third.ID || page.Requests[0].Status != domain.MediaRequestRejected {
+	// Ordered newest created first: the tv show was created after the movie.
+	if page.Requests[0].ID != second.ID || page.Requests[0].Status != domain.MediaRequestFulfilled {
 		t.Fatalf("newest first: %+v", page.Requests[0])
+	}
+	movieRow := page.Requests[1]
+	if movieRow.ID != first.ID || len(movieRow.Requesters) != 2 ||
+		movieRow.Requesters[0].AccountUsername != "alice" || movieRow.Requesters[1].AccountUsername != "bob" {
+		t.Fatalf("aggregated movie row = %+v", movieRow)
 	}
 
 	pendingPage, err := store.ListMediaRequests(ctx, domain.MediaRequestFilter{Status: domain.MediaRequestPending, Page: 1, PageSize: 20})
@@ -126,19 +169,20 @@ func TestListMediaRequestsFiltersAndCounts(t *testing.T) {
 		t.Fatalf("pending filter = %+v", pendingPage)
 	}
 
+	// The keyword search matches titles and requester usernames.
 	queryPage, err := store.ListMediaRequests(ctx, domain.MediaRequestFilter{Query: "星际穿越", Page: 1, PageSize: 20})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if queryPage.Total != 2 {
-		t.Fatalf("query filter total = %d, want 2", queryPage.Total)
+	if queryPage.Total != 1 {
+		t.Fatalf("query filter total = %d, want 1 (aggregated)", queryPage.Total)
 	}
 
 	userPage, err := store.ListMediaRequests(ctx, domain.MediaRequestFilter{Query: "bob", Page: 1, PageSize: 20})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if userPage.Total != 1 || userPage.Requests[0].AccountUsername != "bob" {
+	if userPage.Total != 1 || userPage.Requests[0].TmdbID != 157336 {
 		t.Fatalf("user query = %+v", userPage)
 	}
 
@@ -147,8 +191,54 @@ func TestListMediaRequestsFiltersAndCounts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(emptyPage.Requests) != 0 || emptyPage.Total != 3 {
+	if len(emptyPage.Requests) != 0 || emptyPage.Total != 2 {
 		t.Fatalf("off-page = %+v", emptyPage)
+	}
+}
+
+func TestMyMediaRequestsListsParticipatedTitles(t *testing.T) {
+	ctx := context.Background()
+	store, err := Open(ctx, t.TempDir()+"/manager.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	now := time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)
+	alice := testAccount(t, ctx, store, "alice", now)
+	bob := testAccount(t, ctx, store, "bob", now)
+	makeRequest := func(account domain.Account, id int64, mediaType, title string, at time.Time) {
+		if _, err := store.UpsertMediaRequest(ctx, domain.CreateMediaRequestInput{
+			AccountID: account.ID, AccountUsername: account.Username, TmdbID: id, MediaType: mediaType,
+			Title: title, Now: at,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	makeRequest(alice, 157336, "movie", "星际穿越", now)
+	makeRequest(alice, 1399, "tv", "权力的游戏", now.Add(time.Minute))
+	makeRequest(bob, 157336, "movie", "星际穿越", now.Add(2*time.Minute))
+
+	mine, err := store.MyMediaRequests(ctx, bob.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mine) != 1 || mine[0].TmdbID != 157336 || len(mine[0].Requesters) != 2 {
+		t.Fatalf("bob's requests = %+v", mine)
+	}
+	aliceMine, err := store.MyMediaRequests(ctx, alice.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// alice joined the tv request last, so it is listed first.
+	if len(aliceMine) != 2 || aliceMine[0].TmdbID != 1399 || aliceMine[1].TmdbID != 157336 {
+		t.Fatalf("alice's requests = %+v", aliceMine)
+	}
+	none, err := store.MyMediaRequests(ctx, 9999)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(none) != 0 {
+		t.Fatalf("unknown account requests = %+v", none)
 	}
 }
 
