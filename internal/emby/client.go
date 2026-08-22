@@ -441,7 +441,7 @@ func (c *HTTPClient) ItemPoster(ctx context.Context, itemID string, maxWidth, ma
 	}
 	if response.StatusCode != http.StatusOK {
 		response.Body.Close()
-		return nil, "", fmt.Errorf("Emby poster %q: %s", itemID, response.Status)
+		return nil, "", fmt.Errorf("emby poster %q: %s", itemID, response.Status)
 	}
 	return response.Body, contentType, nil
 }
