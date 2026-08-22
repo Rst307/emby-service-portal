@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -68,6 +69,10 @@ type Options struct {
 	AutoDefault bool
 	// Interval is how often the background checker runs (default 6h).
 	Interval time.Duration
+	// Proxy routes GitHub release API and asset download requests through
+	// an explicit HTTP(S) or SOCKS5 proxy. When empty, the transport honors
+	// the process HTTP(S)_PROXY environment variables.
+	Proxy string
 }
 
 // Release describes the newest applicable GitHub release.
@@ -145,7 +150,7 @@ func New(store SettingStore, options Options) *Service {
 	}
 	s := &Service{
 		store:        store,
-		client:       &http.Client{Timeout: 20 * time.Second},
+		client:       newHTTPClient(options.Proxy),
 		apiBase:      apiBase,
 		downloadBase: strings.TrimRight(options.DownloadBase, "/"),
 		autoDefault:  options.AutoDefault,
@@ -155,6 +160,20 @@ func New(store SettingStore, options Options) *Service {
 	s.state.CurrentVersion = buildinfo.Version
 	s.state.Interval = interval
 	return s
+}
+
+// newHTTPClient builds the HTTP client used for GitHub release API calls and
+// asset downloads. Without an explicit proxy it honors the process
+// HTTP(S)_PROXY environment variables; with one it forces that proxy
+// (HTTP(S) CONNECT or SOCKS5-style URL, validated by config before startup).
+func newHTTPClient(proxyRaw string) *http.Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	if strings.TrimSpace(proxyRaw) != "" {
+		if proxyURL, err := url.Parse(proxyRaw); err == nil {
+			transport.Proxy = http.ProxyURL(proxyURL)
+		}
+	}
+	return &http.Client{Transport: transport, Timeout: 20 * time.Second}
 }
 
 // Interval returns how often the background checker should run.
@@ -505,6 +524,11 @@ func (s *Service) downloadAndVerify(ctx context.Context, release *Release) (stri
 	if release.AssetSize > 0 && written != release.AssetSize {
 		cleanup()
 		return "", fmt.Errorf("下载不完整：收到 %d 字节，预期 %d", written, release.AssetSize)
+	}
+	// Rewind before hashing: io.Copy left the file offset at the end.
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		cleanup()
+		return "", fmt.Errorf("校验更新文件失败: %w", err)
 	}
 	if err := verifyChecksum(release.Checksum, file); err != nil {
 		cleanup()

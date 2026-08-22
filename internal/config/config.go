@@ -56,6 +56,11 @@ type Config struct {
 	// UpdateAuto seeds the stored auto-update flag on first run (default
 	// false). The flag can be toggled at runtime in 系统设置.
 	UpdateAuto bool
+	// UpdateHTTPProxy routes GitHub release API and asset download requests
+	// through an explicit HTTP(S) or SOCKS5 proxy instead of the process
+	// environment proxy (useful where api.github.com is slow or blocked,
+	// e.g. mainland China).
+	UpdateHTTPProxy string
 }
 
 // DefaultUpdateInterval is the update check interval used when
@@ -105,6 +110,7 @@ func FromEnv() (Config, error) {
 		UpdateDownloadBase:    os.Getenv("ESP_UPDATE_DOWNLOAD_BASE"),
 		UpdateInterval:        updateInterval,
 		UpdateAuto:            updateAuto,
+		UpdateHTTPProxy:       os.Getenv("ESP_UPDATE_HTTP_PROXY"),
 	}
 	return cfg, cfg.Validate()
 }
@@ -136,12 +142,13 @@ func (c Config) Validate() error {
 		"ESP_TMDB_BASE_URL":       c.TmdbBaseURL,
 		"ESP_TMDB_IMAGE_BASE_URL": c.TmdbImageBaseURL,
 		"ESP_TMDB_HTTP_PROXY":     c.TmdbHTTPProxy,
+		"ESP_UPDATE_HTTP_PROXY":   c.UpdateHTTPProxy,
 	} {
 		if val == "" {
 			continue
 		}
 		schemes := []string{"http", "https"}
-		if name == "ESP_TMDB_HTTP_PROXY" {
+		if name == "ESP_TMDB_HTTP_PROXY" || name == "ESP_UPDATE_HTTP_PROXY" {
 			schemes = []string{"http", "https", "socks5", "socks5h"}
 		}
 		u, err := url.Parse(val)

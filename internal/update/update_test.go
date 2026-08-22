@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"runtime"
 	"strings"
 	"sync"
@@ -159,6 +160,100 @@ func TestFetchLatestPicksNewestNonDraftAndChecksum(t *testing.T) {
 	want := fmt.Sprintf("%x", sha256.Sum256([]byte("fake-binary-content")))
 	if release.Checksum != want {
 		t.Fatalf("checksum = %q, want %q", release.Checksum, want)
+	}
+}
+
+func TestProxyRoutesRequestsThroughProxy(t *testing.T) {
+	assetName := assetNameFor(runtime.GOOS, runtime.GOARCH)
+	if assetName == "" {
+		t.Skipf("platform %s/%s has no asset", runtime.GOOS, runtime.GOARCH)
+	}
+	payload := []byte("fake-binary-content")
+	checksum := fmt.Sprintf("%x  %s\n", sha256.Sum256(payload), assetName)
+	downloadBase := "http://github.invalid/repos/Rst307/emby-service-portal/releases/download/v0.0.0-build.2"
+
+	var mu sync.Mutex
+	var hits []string
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Forward-proxy semantics: the request line carries the absolute URL
+		// and Host is the intended target, which stays unreachable without
+		// the proxy.
+		mu.Lock()
+		hits = append(hits, r.URL.String())
+		mu.Unlock()
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/releases"):
+			type asset struct {
+				Name               string `json:"name"`
+				BrowserDownloadURL string `json:"browser_download_url"`
+				Size               int64  `json:"size"`
+			}
+			type release struct {
+				TagName     string  `json:"tag_name"`
+				Prerelease  bool    `json:"prerelease"`
+				Draft       bool    `json:"draft"`
+				PublishedAt string  `json:"published_at"`
+				Body        string  `json:"body"`
+				Assets      []asset `json:"assets"`
+			}
+			_ = json.NewEncoder(w).Encode([]release{{
+				TagName: "v0.0.0-build.2", PublishedAt: "2026-08-01T00:00:00Z", Body: "second release",
+				Assets: []asset{{
+					Name: assetName, BrowserDownloadURL: downloadBase + "/" + assetName, Size: int64(len(payload)),
+				}, {
+					Name: assetName + ".sha256", BrowserDownloadURL: downloadBase + "/" + assetName + ".sha256",
+				}},
+			}})
+		case strings.HasSuffix(r.URL.Path, assetName+".sha256"):
+			w.Write([]byte(checksum))
+		case strings.Contains(r.URL.Path, "/releases/download/"):
+			w.Write(payload)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(proxy.Close)
+
+	// APIBase is an unroutable address: only requests that actually travel
+	// through the configured proxy can succeed.
+	service := New(newFakeStore(), Options{
+		APIBase:      "http://127.0.0.1:1",
+		DownloadBase: "http://github.invalid",
+		Proxy:        proxy.URL,
+	})
+	if err := service.Check(context.Background()); err != nil {
+		t.Fatalf("Check through proxy: %v", err)
+	}
+	release, err := service.fetchLatest(context.Background())
+	if err != nil {
+		t.Fatalf("fetchLatest through proxy: %v", err)
+	}
+	downloaded, err := service.downloadAndVerify(context.Background(), release)
+	if err != nil {
+		t.Fatalf("downloadAndVerify through proxy: %v", err)
+	}
+	defer os.Remove(downloaded)
+
+	mu.Lock()
+	defer mu.Unlock()
+	// Without the proxy every request would dial 127.0.0.1:1 and fail; the
+	// successful feed/checksum/asset round trips above already prove the
+	// proxy is in use. The proxy log should show that all traffic was
+	// relayed for the intended targets.
+	var feed, sawChecksum, asset bool
+	for _, hit := range hits {
+		if strings.HasSuffix(hit, "/releases?per_page=10") || strings.HasSuffix(hit, "/releases") {
+			feed = true
+		}
+		if strings.HasSuffix(hit, assetName+".sha256") {
+			sawChecksum = true
+		}
+		if strings.Contains(hit, "/releases/download/") && !strings.HasSuffix(hit, assetName+".sha256") {
+			asset = true
+		}
+	}
+	if !feed || !sawChecksum || !asset {
+		t.Fatalf("proxy did not relay all traffic; hits = %v", hits)
 	}
 }
 

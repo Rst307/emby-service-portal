@@ -165,15 +165,18 @@ sudo systemctl status emby-service-portal
 - **安全**：安装前强制校验 SHA-256；校验失败或发布缺少校验文件时中止更新。
 - **受限环境**：程序目录不可写时（如 Docker 镜像内 `/usr/local/bin`、未授权的 systemd 沙箱），更新会明确报错，建议改用重建镜像或手动替换的方式。Linux systemd 部署请使用更新过的 `scripts/install-linux-service.sh`（已开放程序目录写权限用于自更新）。Docker 部署可通过 `ESP_UPDATE_INTERVAL=0` 完全关闭检测。
 
-中国大陆网络无法直连 GitHub 时，可配置镜像源：
+中国大陆网络无法直连 GitHub 时，有两种做法，可组合使用：
 
 ```bash
-# 例：API 走镜像，安装包仍走官方源（或同时配置下载代理）
-ESP_UPDATE_API_BASE=https://api.github.com
-ESP_UPDATE_DOWNLOAD_BASE=
+# 方案 A：API 与下载都走镜像/反代（与方案 B 不冲突，可同时配置）
+ESP_UPDATE_API_BASE=https://api.github.com      # 指向可达的 GitHub API 镜像/反代
+ESP_UPDATE_DOWNLOAD_BASE=                        # 指向 ghproxy 风格的下载代理，为空则用官方下载地址
+
+# 方案 B：整个更新链路（API 请求 + 安装包下载 + 校验和）经一台代理服务器出网
+ESP_UPDATE_HTTP_PROXY=http://127.0.0.1:7890      # 或 socks5://127.0.0.1:1080
 ```
 
-其余变量（`ESP_UPDATE_API_BASE`、`ESP_UPDATE_DOWNLOAD_BASE`、`ESP_UPDATE_INTERVAL`、`ESP_UPDATE_AUTO`）说明见 [.env.example](.env.example)。
+`ESP_UPDATE_HTTP_PROXY` 支持 HTTP(S) 与 SOCKS5；不设置时沿用进程环境变量 `HTTP(S)_PROXY`（Docker 部署可用 `-e HTTP_PROXY=...` 传入），设置后强制走该代理。其余变量（`ESP_UPDATE_API_BASE`、`ESP_UPDATE_DOWNLOAD_BASE`、`ESP_UPDATE_INTERVAL`、`ESP_UPDATE_AUTO`）说明见 [.env.example](.env.example)。
 
 ## 外部 API
 

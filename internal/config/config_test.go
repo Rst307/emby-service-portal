@@ -57,3 +57,19 @@ func TestValidateRequiresSeparateCredentialMasterKey(t *testing.T) {
 		t.Fatalf("Validate() error = %v, want master key error", err)
 	}
 }
+
+func TestValidateRejectsInvalidUpdateProxy(t *testing.T) {
+	cfg := validConfig()
+	cfg.UpdateHTTPProxy = "ftp://proxy.example.test:21"
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "ESP_UPDATE_HTTP_PROXY") {
+		t.Fatalf("Validate() error = %v, want update proxy error", err)
+	}
+	cfg.UpdateHTTPProxy = "http://127.0.0.1:7890"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() with http proxy error = %v", err)
+	}
+	cfg.UpdateHTTPProxy = "socks5://127.0.0.1:1080"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() with socks5 proxy error = %v", err)
+	}
+}

@@ -88,6 +88,7 @@ func New(ctx context.Context, cfg config.Config) (*Application, error) {
 		DownloadBase: cfg.UpdateDownloadBase,
 		AutoDefault:  cfg.UpdateAuto,
 		Interval:     cfg.UpdateInterval,
+		Proxy:        cfg.UpdateHTTPProxy,
 	})
 	if err := updateService.Ensure(ctx); err != nil {
 		return closeOnError(fmt.Errorf("seed update settings: %w", err))
