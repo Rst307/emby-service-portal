@@ -94,9 +94,11 @@ type State struct {
 	Applied        bool // update applied; restart pending
 }
 
-// Available reports whether a newer applicable release was found.
+// Available reports whether a newer applicable release was found. A successful
+// check that found the current binary already up to date is not available.
 func (s State) Available() bool {
-	return s.Latest != nil && s.ApplyBlocked() == "" && !s.Updating && !s.Applied
+	return s.Latest != nil && s.ApplyBlocked() == "" && !s.Updating && !s.Applied &&
+		compareVersions(s.Latest.Version, s.CurrentVersion) > 0
 }
 
 // ApplyBlocked returns "" when Apply can proceed, otherwise the reason why
@@ -317,7 +319,7 @@ func (s *Service) BackgroundTick(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	s.mu.Lock()
-	available := s.state.Latest != nil && compareVersions(s.state.Latest.Version, buildinfo.Version) != 0
+	available := s.state.Latest != nil && compareVersions(s.state.Latest.Version, buildinfo.Version) > 0
 	s.mu.Unlock()
 	if !available || !s.Auto(ctx) {
 		return false, nil

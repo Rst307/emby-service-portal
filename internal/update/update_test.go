@@ -226,3 +226,34 @@ func TestApplyBlockedReasons(t *testing.T) {
 		t.Fatalf("available state should not be blocked: %s", got)
 	}
 }
+
+// TestAvailableRequiresNewerVersion guards the regression where a successful
+// check that found the current binary already up to date still reported
+// 可更新 in the admin panel.
+func TestAvailableRequiresNewerVersion(t *testing.T) {
+	cases := []struct {
+		name    string
+		current string
+		latest  string
+		blocked string
+		want    bool
+	}{
+		{"same release", "v1.0.0", "v1.0.0", "", false},
+		{"newer release", "v1.0.0", "v1.0.1", "", true},
+		{"older release never happens but is not available", "v1.0.1", "v1.0.0", "", false},
+		{"same release with missing checksum still blocked", "v1.0.0", "v1.0.0", "发布缺少校验和，已阻止自动安装", false},
+		{"newer release missing checksum is blocked", "v1.0.0", "v1.0.1", "发布缺少校验和，已阻止自动安装", false},
+		{"dev build treats any release as newer", "dev", "v1.0.0", "", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			state := State{CurrentVersion: tc.current, Latest: &Release{Version: tc.latest, Checksum: "ok"}}
+			if tc.blocked != "" {
+				state.Latest.Checksum = ""
+			}
+			if got := state.Available(); got != tc.want {
+				t.Fatalf("Available() = %v, want %v (blocked=%q)", got, tc.want, state.ApplyBlocked())
+			}
+		})
+	}
+}
