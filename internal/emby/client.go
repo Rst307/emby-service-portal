@@ -84,6 +84,12 @@ type LibraryWatcher interface {
 	RecentlyAdded(ctx context.Context, limit int) ([]RecentlyAddedItem, error)
 }
 
+// PosterProvider streams item artwork (e.g. the primary poster) from Emby so
+// the portal can proxy images server-side; browsers never see the API key.
+type PosterProvider interface {
+	ItemPoster(ctx context.Context, itemID string, maxWidth, maxHeight int) (io.ReadCloser, string, error)
+}
+
 type PasswordSetter interface {
 	SetUserPassword(ctx context.Context, userID, password string) error
 }
@@ -404,6 +410,40 @@ func (c *HTTPClient) RecentlyAdded(ctx context.Context, limit int) ([]RecentlyAd
 		})
 	}
 	return out, nil
+}
+
+// ItemPoster streams the primary image for one item (itemID is used verbatim
+// as the Emby route segment; the caller decides whether the ID is trusted).
+// maxWidth/maxHeight are optional constraints; zero values are omitted. The
+// returned reader must be closed by the caller.
+func (c *HTTPClient) ItemPoster(ctx context.Context, itemID string, maxWidth, maxHeight int) (io.ReadCloser, string, error) {
+	endpoint := c.endpoint("Items/" + url.PathEscape(itemID) + "/Images/Primary")
+	query := endpoint.Query()
+	if maxWidth > 0 {
+		query.Set("maxWidth", strconv.Itoa(maxWidth))
+	}
+	if maxHeight > 0 {
+		query.Set("maxHeight", strconv.Itoa(maxHeight))
+	}
+	query.Set("quality", "90")
+	endpoint.RawQuery = query.Encode()
+	request, err := c.request(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	response, err := c.httpClient.Do(request)
+	if err != nil {
+		return nil, "", fmt.Errorf("fetch Emby poster: %w", err)
+	}
+	contentType := response.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "image/jpeg"
+	}
+	if response.StatusCode != http.StatusOK {
+		response.Body.Close()
+		return nil, "", fmt.Errorf("Emby poster %q: %s", itemID, response.Status)
+	}
+	return response.Body, contentType, nil
 }
 
 // parseEmbyTime parses the timestamp shapes Emby emits for BaseItem dates: the

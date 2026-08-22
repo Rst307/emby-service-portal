@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -44,6 +45,9 @@ func (stubEmby) SeriesEpisodes(context.Context, int64) (emby.SeasonEpisodes, boo
 func (stubEmby) RecentlyAdded(context.Context, int) ([]emby.RecentlyAddedItem, error) {
 	return nil, nil
 }
+func (stubEmby) ItemPoster(_ context.Context, itemID string, _, _ int) (io.ReadCloser, string, error) {
+	return io.NopCloser(strings.NewReader("poster-bytes-" + itemID)), "image/jpeg", nil
+}
 
 // The remaining emby.Client methods are never exercised by these tests.
 func (stubEmby) CreateUser(context.Context, string, string) (emby.User, error) {
@@ -76,7 +80,7 @@ func testPortalServer(t *testing.T, ctx context.Context) (*Server, *sqlite.Store
 	portalService := portal.New(store, embyStub, time.Hour)
 	tmdbClient := tmdb.NewClient("")
 	requestService := requests.New(store, tmdbClient, embyStub)
-	recentService := recent.New(store, embyStub, "https://emby.example.com/emby")
+	recentService := recent.New(store, embyStub)
 	location, err := time.LoadLocation("Asia/Shanghai")
 	if err != nil {
 		t.Fatal(err)
@@ -86,7 +90,7 @@ func testPortalServer(t *testing.T, ctx context.Context) (*Server, *sqlite.Store
 		t.Fatal(err)
 	}
 	updateService := update.New(store, update.Options{})
-	server, err := New(authService, portalService, accountService, inviteService, paymentService, settingsService, requestService, recentService, tmdbClient, updateService, "https://emby.example.com/emby", "api-key", false, time.Hour, location)
+	server, err := New(authService, portalService, accountService, inviteService, paymentService, settingsService, requestService, recentService, tmdbClient, updateService, "api-key", false, time.Hour, location)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +157,8 @@ func TestPortalDashboardShowsRecentlyAddedFeed(t *testing.T) {
 		"Fresh Pick",
 		"星际穿越",
 		"求剧已入库",
-		"https://emby.example.com/emby/Items/m-new/Images/Primary",
+		"src=\"/img/emby/m-new\"",
+		"data-scroll-row",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("dashboard body missing %q", want)
@@ -169,5 +174,51 @@ func TestPortalDashboardRedirectsAnonymousVisitors(t *testing.T) {
 	server.Handler().ServeHTTP(resp, req)
 	if resp.Code != http.StatusSeeOther {
 		t.Fatalf("status = %d, want 303 redirect to login", resp.Code)
+	}
+}
+
+func TestRecentImageProxyRequiresSessionAndStreamsPoster(t *testing.T) {
+	ctx := context.Background()
+	server, store := testPortalServer(t, ctx)
+	now := time.Now().UTC()
+
+	// Anonymous visitors must not be able to pull proxied posters.
+	anonymous := httptest.NewRequest(http.MethodGet, "/img/emby/m-new", nil)
+	anonymousResp := httptest.NewRecorder()
+	server.Handler().ServeHTTP(anonymousResp, anonymous)
+	if anonymousResp.Code != http.StatusNotFound {
+		t.Fatalf("anonymous status = %d, want 404", anonymousResp.Code)
+	}
+
+	account, err := store.CreateAccount(ctx, domain.Account{
+		EmbyUserID: "emby-bob", Username: "bob", Status: "active",
+		ExpiresAt: now.Add(30 * 24 * time.Hour), CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	token := "poster-session-token"
+	if err := store.CreateUserSession(ctx, domain.UserSession{
+		ID: "session-poster", AccountID: account.ID, TokenHash: portalTokenHash(token),
+		CreatedAt: now, ExpiresAt: now.Add(time.Hour),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/img/emby/m-new", nil)
+	req.AddCookie(&http.Cookie{Name: userSessionCookie, Value: token})
+	resp := httptest.NewRecorder()
+	server.Handler().ServeHTTP(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.Code)
+	}
+	if got := resp.Body.String(); got != "poster-bytes-m-new" {
+		t.Fatalf("body = %q, want proxied poster bytes", got)
+	}
+	if contentType := resp.Header().Get("Content-Type"); contentType != "image/jpeg" {
+		t.Fatalf("Content-Type = %q, want image/jpeg", contentType)
+	}
+	if cache := resp.Header().Get("Cache-Control"); cache == "" {
+		t.Fatal("missing Cache-Control on proxied poster")
 	}
 }

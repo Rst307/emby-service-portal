@@ -2092,16 +2092,46 @@ body.seerr:hover::-webkit-scrollbar-thumb { background-color: #6b7280; }
   margin-bottom: 1.1rem;
 }
 .seerr-recent-head .seerr-panel-title { margin-bottom: 0; }
-.seerr-recent-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(8.6rem, 1fr));
-  gap: 1.05rem;
+.seerr-recent-actions {
+  display: inline-flex; align-items: center; gap: 0.5rem;
 }
-.seerr-recent-card { margin: 0; min-width: 0; }
+.seerr-recent-hint { font-size: 0.78rem; }
+.seerr-scroll-btn {
+  width: 2rem; height: 2rem; border-radius: 50%;
+  border: 1px solid var(--s-700); background: rgba(75, 85, 99, 0.25);
+  color: var(--s-100); font-size: 1.15rem; line-height: 1;
+  cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+  transition: background 0.15s ease, transform 0.15s ease;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+.seerr-scroll-btn:hover { background: rgba(242, 174, 85, 0.18); }
+.seerr-scroll-btn:active { transform: scale(0.92); }
+.seerr-scroll-btn:disabled { opacity: 0.35; cursor: default; }
+
+.seerr-recent-row {
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  scrollbar-width: none;
+  padding: 0.15rem 0.15rem 0.6rem;
+}
+.seerr-recent-row::-webkit-scrollbar { display: none; }
+
+.seerr-recent-card {
+  margin: 0; min-width: 0;
+  flex: 0 0 auto; width: 8.6rem;
+  scroll-snap-align: start;
+  cursor: grab;
+}
+.seerr-recent-card:active { cursor: grabbing; }
 .seerr-recent-poster {
   position: relative;
   aspect-ratio: 2 / 3;
-  border-radius: 10px;
+  border-radius: 12px;
   overflow: hidden;
   background: rgba(75, 85, 99, 0.22);
   border: 1px solid var(--s-700);
@@ -2116,11 +2146,26 @@ body.seerr:hover::-webkit-scrollbar-thumb { background-color: #6b7280; }
 }
 .seerr-recent-meta { margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; }
 .seerr-recent-title {
-  font-size: 0.88rem; font-weight: 700; color: var(--s-100); line-height: 1.35;
+  font-size: 0.86rem; font-weight: 700; color: var(--s-100); line-height: 1.35;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   overflow-wrap: anywhere;
 }
 .seerr-recent-sub { display: flex; align-items: center; gap: 0.45rem; }
+
+/* 移动端：更紧凑的卡片与标题，触摸滑动为主 */
+@media (max-width: 640px) {
+  .seerr-recent-row {
+    margin: 0 -3.2rem;
+    padding: 0.15rem 3.2rem 0.6rem;
+    gap: 0.85rem;
+  }
+  .seerr-recent-card { width: 7.1rem; }
+  .seerr-recent-poster { border-radius: 10px; }
+  .seerr-recent-title { font-size: 0.78rem; }
+  .seerr-recent-hint { display: none; }
+  .seerr-scroll-btn { width: 1.8rem; height: 1.8rem; font-size: 1rem; }
+  .seerr-recent-flag { left: 0.35rem; bottom: 0.35rem; font-size: 0.6rem; padding: 0.15rem 0.45rem; }
+}
 
 /* ---------- 求剧管理（管理端） ---------- */
 

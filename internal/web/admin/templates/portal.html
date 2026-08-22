@@ -92,13 +92,17 @@
           <p class="seerr-eyebrow">FRESH IN LIBRARY</p>
           <h2 class="seerr-panel-title">最近更新</h2>
         </div>
-        <span class="seerr-mute">来自 Emby 新增影视</span>
+        <div class="seerr-recent-actions">
+          <span class="seerr-mute seerr-recent-hint">左右滑动</span>
+          <button type="button" class="seerr-scroll-btn" data-scroll="prev" aria-label="向左滚动">‹</button>
+          <button type="button" class="seerr-scroll-btn" data-scroll="next" aria-label="向右滚动">›</button>
+        </div>
       </div>
-      <div class="seerr-recent-row">
+      <div class="seerr-recent-row" data-scroll-row>
         {{range .RecentlyAdded}}
         <figure class="seerr-recent-card">
           <div class="seerr-recent-poster">
-            {{if .ImageURL}}<img class="seerr-recent-img" data-fallback-poster src="{{.ImageURL}}" alt="{{.Title}}" loading="lazy" referrerpolicy="no-referrer">{{else}}<span class="seerr-result-placeholder" aria-hidden="true">{{firstRune .Title}}</span>{{end}}
+            {{if .ImageURL}}<img class="seerr-recent-img" data-fallback-poster draggable="false" src="{{.ImageURL}}" alt="{{.Title}}" loading="lazy" referrerpolicy="no-referrer">{{else}}<span class="seerr-result-placeholder" aria-hidden="true">{{firstRune .Title}}</span>{{end}}
             {{if gt .RequestID 0}}<span class="seerr-badge seerr-badge-inlib seerr-recent-flag">求剧已入库</span>{{end}}
           </div>
           <figcaption class="seerr-recent-meta">

@@ -6,9 +6,9 @@ package recent
 
 import (
 	"context"
+	"io"
 	"log"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/Rst307/emby-service-portal/internal/domain"
@@ -25,18 +25,22 @@ const ScanBatch = 30
 // entries are pruned on every scan.
 const KeepLatest = 50
 
+// watcher is the Emby surface the recent module needs: the additions feed
+// and proxied artwork for the portal feed.
+type watcher interface {
+	emby.LibraryWatcher
+	emby.PosterProvider
+}
+
 // Service records library additions and serves the 最近更新 feed.
 type Service struct {
 	store *sqlite.Store
-	emby  emby.LibraryWatcher
-	// imageBase is the Emby root used to build poster URLs for the feed
-	// (e.g. "https://emby.example.com/emby").
-	imageBase string
-	now       func() time.Time
+	emby  watcher
+	now   func() time.Time
 }
 
-func New(store *sqlite.Store, client emby.LibraryWatcher, embyBaseURL string) *Service {
-	return &Service{store: store, emby: client, imageBase: strings.TrimRight(embyBaseURL, "/"), now: time.Now}
+func New(store *sqlite.Store, client watcher) *Service {
+	return &Service{store: store, emby: client, now: time.Now}
 }
 
 // ScanOnce fetches the newest library additions, records them, and fulfills
@@ -88,17 +92,25 @@ func (s *Service) Recent(ctx context.Context, limit int) ([]ItemView, error) {
 	}
 	views := make([]ItemView, 0, len(items))
 	for _, item := range items {
-		views = append(views, ItemView{RecentlyAdded: item, ImageURL: posterURL(s.imageBase, item.EmbyItemID)})
+		views = append(views, ItemView{RecentlyAdded: item, ImageURL: posterURL(item.EmbyItemID)})
 	}
 	return views, nil
 }
 
-// posterURL builds the Emby primary-image URL for one item. The image is
-// loaded by the browser anonymously, so it must not carry the API key; the
-// page CSP allow-lists the Emby origin instead.
-func posterURL(imageBase, itemID string) string {
-	if imageBase == "" || itemID == "" {
+// Poster streams the Emby primary image for one item through the server so
+// browsers never see the API key (Emby may reject anonymous image loads). The
+// returned reader must be closed by the caller. Errors mean the poster is not
+// available; the web layer turns them into 404s so the template fallback
+// placeholder kicks in.
+func (s *Service) Poster(ctx context.Context, itemID string) (io.ReadCloser, string, error) {
+	return s.emby.ItemPoster(ctx, itemID, 292, 438)
+}
+
+// posterURL builds the same-origin route that proxies one item's poster from
+// Emby behind the API key. It stays empty when there is nothing to display.
+func posterURL(itemID string) string {
+	if itemID == "" {
 		return ""
 	}
-	return imageBase + "/Items/" + url.PathEscape(itemID) + "/Images/Primary?maxHeight=438&maxWidth=292"
+	return "/img/emby/" + url.PathEscape(itemID)
 }

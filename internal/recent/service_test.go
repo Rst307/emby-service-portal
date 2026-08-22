@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,6 +21,13 @@ type fakeWatcher struct {
 
 func (f *fakeWatcher) RecentlyAdded(_ context.Context, _ int) ([]emby.RecentlyAddedItem, error) {
 	return f.items, f.err
+}
+
+func (f *fakeWatcher) ItemPoster(_ context.Context, itemID string, _, _ int) (io.ReadCloser, string, error) {
+	if f.err != nil {
+		return nil, "", f.err
+	}
+	return io.NopCloser(strings.NewReader("fake-poster-" + itemID)), "image/jpeg", nil
 }
 
 func TestScanOnceRecordsAndFulfillsPendingRequest(t *testing.T) {
@@ -57,7 +65,7 @@ func TestScanOnceRecordsAndFulfillsPendingRequest(t *testing.T) {
 		{ID: "m1", Name: "Interstellar", Type: "movie", TmdbID: 157336, DateCreated: now.Add(time.Hour)},
 		{ID: "s1", Name: "The Expanse", Type: "tv", TmdbID: 46952, DateCreated: now.Add(2 * time.Hour)},
 		{ID: "m2", Name: "NoDate", Type: "movie", TmdbID: 99999}, // zero DateCreated falls back to scan time
-	}}, "https://emby.example.com/emby")
+	}})
 	service.now = func() time.Time { return now.Add(3 * time.Hour) }
 
 	if err := service.ScanOnce(ctx); err != nil {
@@ -94,7 +102,7 @@ func TestScanOncePropagatesFetchErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	service := New(store, &fakeWatcher{err: errors.New("emby down")}, "https://emby.example.com/emby")
+	service := New(store, &fakeWatcher{err: errors.New("emby down")})
 	if err := service.ScanOnce(context.Background()); err == nil {
 		t.Fatal("ScanOnce must propagate watcher errors")
 	}
@@ -115,7 +123,7 @@ func TestRecentBuildsPosterURLs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	service := New(store, &fakeWatcher{}, "https://emby.example.com/emby/")
+	service := New(store, &fakeWatcher{})
 	items, err := service.Recent(ctx, 10)
 	if err != nil {
 		t.Fatal(err)
@@ -123,11 +131,34 @@ func TestRecentBuildsPosterURLs(t *testing.T) {
 	if len(items) != 1 {
 		t.Fatalf("items = %d, want 1", len(items))
 	}
-	wantURL := "https://emby.example.com/emby/Items/item%2F1/Images/Primary?maxHeight=438&maxWidth=292"
+	wantURL := "/img/emby/item%2F1"
 	if items[0].ImageURL != wantURL {
 		t.Fatalf("ImageURL = %q, want %q", items[0].ImageURL, wantURL)
 	}
 	if items[0].Title != "星际穿越" || items[0].MediaType != "movie" {
 		t.Fatalf("item = %+v", items[0])
+	}
+}
+
+func TestPosterStreamsItemArtwork(t *testing.T) {
+	ctx := context.Background()
+	store, err := sqlite.Open(ctx, t.TempDir()+"/manager.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	service := New(store, &fakeWatcher{})
+
+	body, contentType, err := service.Poster(ctx, "item-123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer body.Close()
+	raw, err := io.ReadAll(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(raw) != "fake-poster-item-123" || contentType != "image/jpeg" {
+		t.Fatalf("poster = %q %q", raw, contentType)
 	}
 }

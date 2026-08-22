@@ -77,7 +77,7 @@ func New(ctx context.Context, cfg config.Config) (*Application, error) {
 		tmdb.SetPosterBaseURL(cfg.TmdbImageBaseURL)
 	}
 	requestService := requests.New(store, tmdbClient, embyClient)
-	recentService := recent.New(store, embyClient, cfg.EmbyBaseURL)
+	recentService := recent.New(store, embyClient)
 	timeLocation, err := cfg.TimeLocation()
 	if err != nil {
 		return closeOnError(err)
@@ -99,7 +99,7 @@ func New(ctx context.Context, cfg config.Config) (*Application, error) {
 	if err := updateService.Cleanup(); err != nil {
 		return closeOnError(fmt.Errorf("clean update artifacts: %w", err))
 	}
-	webServer, err := web.New(authService, portalService, accountService, inviteService, paymentService, settingsService, requestService, recentService, tmdbClient, updateService, cfg.EmbyBaseURL, cfg.APIKey, cfg.CookieSecure, cfg.SessionTTL, timeLocation)
+	webServer, err := web.New(authService, portalService, accountService, inviteService, paymentService, settingsService, requestService, recentService, tmdbClient, updateService, cfg.APIKey, cfg.CookieSecure, cfg.SessionTTL, timeLocation)
 	if err != nil {
 		return closeOnError(fmt.Errorf("configure web server: %w", err))
 	}

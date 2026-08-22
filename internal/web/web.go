@@ -54,9 +54,6 @@ type Server struct {
 	loginLimit   *ratelimit.Limiter
 	publicLimit  *ratelimit.Limiter
 	requestLimit *ratelimit.Limiter
-	// embyImgHost is the scheme://host of the Emby server, allow-listed in the
-	// page CSP so the 最近更新 feed can load posters directly from Emby.
-	embyImgHost string
 	// notifyRestart asks main to exit with RestartExitCode after an applied
 	// update; set by the app composition root.
 	notifyRestart func()
@@ -68,7 +65,7 @@ func (s *Server) SetRestartNotifier(notify func()) {
 	s.notifyRestart = notify
 }
 
-func New(authService *auth.Service, portalService *portal.Service, accountService *accounts.Service, inviteService *invites.Service, paymentService *payments.Service, settingsService *settings.Service, requestService *requests.Service, recentService *recent.Service, tmdbClient *tmdb.Client, updater *update.Service, embyBaseURL, apiKey string, cookieSecure bool, sessionTTL time.Duration, timeLocation *time.Location) (*Server, error) {
+func New(authService *auth.Service, portalService *portal.Service, accountService *accounts.Service, inviteService *invites.Service, paymentService *payments.Service, settingsService *settings.Service, requestService *requests.Service, recentService *recent.Service, tmdbClient *tmdb.Client, updater *update.Service, apiKey string, cookieSecure bool, sessionTTL time.Duration, timeLocation *time.Location) (*Server, error) {
 	if timeLocation == nil {
 		timeLocation, _ = time.LoadLocation("Asia/Shanghai")
 	}
@@ -79,23 +76,8 @@ func New(authService *auth.Service, portalService *portal.Service, accountServic
 	return &Server{
 		auth: authService, portal: portalService, accounts: accountService, invites: inviteService, payments: paymentService,
 		requests: requestService, recent: recentService, tmdb: tmdbClient, settings: settingsService, updater: updater, apiKey: apiKey, templates: templates, cookieSecure: cookieSecure, sessionTTL: sessionTTL,
-		embyImgHost: embyImageHost(embyBaseURL),
-		loginLimit:  ratelimit.New(10, time.Minute), publicLimit: ratelimit.New(20, time.Minute), requestLimit: ratelimit.New(20, time.Hour),
+		loginLimit: ratelimit.New(10, time.Minute), publicLimit: ratelimit.New(20, time.Minute), requestLimit: ratelimit.New(20, time.Hour),
 	}, nil
-}
-
-// embyImageHost derives the scheme://host of the Emby base URL so the page
-// CSP can allow posters loaded directly from the Emby server. An empty
-// result means no extra allow-list entry is needed.
-func embyImageHost(baseURL string) string {
-	if baseURL == "" {
-		return ""
-	}
-	u, err := url.Parse(baseURL)
-	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
-		return ""
-	}
-	return u.Scheme + "://" + u.Host
 }
 
 // displayZone returns the runtime-configured display time zone name and location.
@@ -163,6 +145,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /portal/login", s.portalLoginPage)
 	mux.HandleFunc("POST /portal/login", s.portalLogin)
 	mux.HandleFunc("GET /portal/", s.portalDashboard)
+	mux.HandleFunc("GET /img/emby/{id}", s.recentImage)
 	mux.HandleFunc("GET /portal/request", s.portalRequestPage)
 	mux.HandleFunc("POST /portal/request", s.portalRequestCreate)
 	mux.HandleFunc("POST /portal/logout", s.portalLogout)
@@ -181,7 +164,34 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /renew", s.renew)
 	mux.HandleFunc("POST /renew/payment", s.renewPaymentCreate)
 	mux.HandleFunc("POST /admin/logout", s.logout)
-	return securityHeaders(tmdb.PosterBaseHost(), []string{s.embyImgHost}, s.limitBody(s.ensureCSRF(mux)))
+	return securityHeaders(tmdb.PosterBaseHost(), s.limitBody(s.ensureCSRF(mux)))
+}
+
+// recentImage serves one 最近更新 poster by proxying the Emby primary image
+// behind the API key (Emby may reject anonymous image loads, which broke the
+// feed). Only signed-in portal users can pull images; failures surface as 404
+// so the template's fallback placeholder takes over.
+func (s *Server) recentImage(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.portalAccount(r); !ok {
+		http.NotFound(w, r)
+		return
+	}
+	itemID := r.PathValue("id")
+	if itemID == "" {
+		http.NotFound(w, r)
+		return
+	}
+	body, contentType, err := s.recent.Poster(r.Context(), itemID)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	defer body.Close()
+	w.Header().Set("Content-Type", contentType)
+	// Posters are stable per item; an hour of freshness keeps the feed snappy
+	// without pinning artwork forever.
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	_, _ = io.Copy(w, io.LimitReader(body, 5<<20))
 }
 
 func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
@@ -331,7 +341,7 @@ func validCSRF(r *http.Request) bool {
 	form := r.Form.Get("csrf_token")
 	return len(form) == len(cookie.Value) && subtle.ConstantTimeCompare([]byte(form), []byte(cookie.Value)) == 1
 }
-func securityHeaders(posterHost string, extraImgHosts []string, next http.Handler) http.Handler {
+func securityHeaders(posterHost string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// HTML pages contain session-scoped state, CSRF tokens, or account data.
 		// Static asset handlers deliberately override this with their own cache policy.
@@ -345,11 +355,6 @@ func securityHeaders(posterHost string, extraImgHosts []string, next http.Handle
 		imgSrc := "img-src 'self' data: https://image.tmdb.org"
 		if host := strings.TrimSpace(posterHost); host != "" && host != "https://image.tmdb.org" {
 			imgSrc += " " + host
-		}
-		for _, host := range extraImgHosts {
-			if host = strings.TrimSpace(host); host != "" {
-				imgSrc += " " + host
-			}
 		}
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")

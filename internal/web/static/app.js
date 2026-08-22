@@ -379,3 +379,47 @@ document.addEventListener(
   },
   true
 );
+
+/* ============================================================
+   最近更新横向滑动
+   - 按钮（data-scroll="prev|next"）按一行卡片步进
+   - 指针拖拽滚动（data-scroll-row），触摸/鼠标均可
+   ============================================================ */
+
+document.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-scroll]");
+  if (!button) return;
+  const row = button.closest(".seerr-panel")?.querySelector("[data-scroll-row]");
+  if (!row) return;
+  const card = row.querySelector(".seerr-recent-card");
+  const step = card ? card.offsetWidth + 16 : 320;
+  row.scrollBy({ left: button.dataset.scroll === "prev" ? -step : step, behavior: "smooth" });
+});
+
+document.addEventListener("pointerdown", (event) => {
+  if (event.pointerType !== "mouse") return; // 触摸交给浏览器原生滚动（touch-action: pan-x）
+  const row = event.target.closest("[data-scroll-row]");
+  if (!row || row.scrollWidth <= row.clientWidth) return;
+  if (event.target.closest("a, button, input, select, textarea")) return;
+  const startX = event.clientX;
+  const startScroll = row.scrollLeft;
+  let dragging = false;
+
+  const move = (moveEvent) => {
+    const delta = moveEvent.clientX - startX;
+    if (!dragging && Math.abs(delta) > 5) {
+      dragging = true;
+      row.style.scrollSnapType = "none";
+    }
+    if (dragging) row.scrollLeft = startScroll - delta;
+  };
+  const up = () => {
+    document.removeEventListener("pointermove", move);
+    document.removeEventListener("pointerup", up);
+    document.removeEventListener("pointercancel", up);
+    if (dragging) row.style.scrollSnapType = "";
+  };
+  document.addEventListener("pointermove", move);
+  document.addEventListener("pointerup", up);
+  document.addEventListener("pointercancel", up);
+});
