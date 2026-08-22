@@ -12,6 +12,7 @@ import (
 
 	"github.com/Rst307/emby-service-portal/internal/app"
 	"github.com/Rst307/emby-service-portal/internal/config"
+	"github.com/Rst307/emby-service-portal/internal/update"
 )
 
 func main() {
@@ -56,10 +57,42 @@ func main() {
 			}
 		}
 	}()
+	// Self-update checker: detection always runs; with auto-update enabled it
+	// also downloads, installs and requests a restart on a new release.
+	updateContext, stopUpdater := context.WithCancel(context.Background())
+	updateDone := make(chan struct{})
+	go func() {
+		defer close(updateDone)
+		updaterInterval := application.Updater.Interval()
+		if updaterInterval <= 0 {
+			return
+		}
+		ticker := time.NewTicker(updaterInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-updateContext.Done():
+				return
+			case <-ticker.C:
+				applied, err := application.RunUpdateTick(updateContext)
+				if err != nil && !errors.Is(err, context.Canceled) {
+					log.Printf("check for updates: %v", err)
+				}
+				if applied {
+					log.Printf("auto-update applied; requesting restart")
+					application.RequestRestart()
+				}
+			}
+		}
+	}()
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	restart := false
 	select {
 	case <-stop:
+	case <-application.RestartRequested():
+		restart = true
+		log.Printf("update applied; shutting down for restart")
 	case err := <-serveErrors:
 		log.Printf("serve HTTP: %v", err)
 	}
@@ -76,4 +109,12 @@ func main() {
 	}
 	stopWorker()
 	<-workerDone
+	stopUpdater()
+	<-updateDone
+	if restart {
+		// systemd Restart=on-failure (and other supervisors) treat this code
+		// as a restart request; the binary on disk is already the new one.
+		log.Printf("exiting with code %d for restart", update.RestartExitCode)
+		os.Exit(update.RestartExitCode)
+	}
 }

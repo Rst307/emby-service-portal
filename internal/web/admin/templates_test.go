@@ -11,6 +11,7 @@ import (
 	"github.com/Rst307/emby-service-portal/internal/domain"
 	"github.com/Rst307/emby-service-portal/internal/requests"
 	"github.com/Rst307/emby-service-portal/internal/tmdb"
+	"github.com/Rst307/emby-service-portal/internal/update"
 )
 
 func TestRenderDashboardShowsAccountStats(t *testing.T) {
@@ -124,6 +125,30 @@ func TestRenderFormatsTimesInConfiguredLocation(t *testing.T) {
 	}
 }
 
+func TestRenderDashboardShowsUpdateBanner(t *testing.T) {
+	templates, err := NewTemplates(time.UTC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	templates.Render(response, "dashboard", ViewData{
+		Update: update.State{
+			CurrentVersion: "dev",
+			Latest: &update.Release{
+				Version:   "v0.0.0-build.42",
+				AssetName: "emby-service-portal-linux-amd64",
+				Checksum:  strings.Repeat("ab", 32),
+			},
+		},
+	})
+	page := response.Body.String()
+	for _, marker := range []string{"update-banner", "发现新版本 v0.0.0-build.42", "前往更新"} {
+		if !strings.Contains(page, marker) {
+			t.Fatalf("dashboard missing %q: %s", marker, page)
+		}
+	}
+}
+
 func TestRenderStatusUsesRequestedStatusAfterSuccessfulExecution(t *testing.T) {
 	templates := &Templates{templates: template.Must(template.New("root").Parse(`{{define "page"}}complete{{end}}`))}
 	response := httptest.NewRecorder()
@@ -218,6 +243,40 @@ func TestRenderSettingsShowsSelectedTimeZone(t *testing.T) {
 	})
 	page := response.Body.String()
 	for _, marker := range []string{"显示时区", "保存设置", `value="Asia/Shanghai" selected`, "UTC&#43;08:00", "当前显示时区：Asia/Shanghai", "__custom__", "data-time-zone-select", "data-custom-time-zone", "支付后跳转地址（可选）", "/admin/settings"} {
+		if !strings.Contains(page, marker) {
+			t.Fatalf("settings page missing %q: %s", marker, page)
+		}
+	}
+}
+
+func TestRenderSettingsShowsUpdatePanel(t *testing.T) {
+	templates, err := NewTemplates(time.UTC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	templates.Render(response, "settings", ViewData{
+		CSRFToken: "csrf",
+		Update: update.State{
+			CurrentVersion: "v0.0.0-build.1",
+			Interval:       6 * time.Hour,
+			AutoUpdate:     true,
+			LastCheck:      time.Date(2030, 1, 1, 12, 0, 0, 0, time.UTC),
+			CheckError:     "",
+			Updating:       false,
+			Applied:        false,
+			Latest: &update.Release{
+				Version:     "v0.0.0-build.42",
+				PublishedAt: time.Date(2030, 1, 30, 0, 0, 0, 0, time.UTC),
+				Notes:       "second release",
+				AssetName:   "emby-service-portal-linux-amd64",
+				AssetSize:   12_345_678,
+				Checksum:    strings.Repeat("ab", 32),
+			},
+		},
+	})
+	page := response.Body.String()
+	for _, marker := range []string{"系统更新", "当前版本", "v0.0.0-build.1", "v0.0.0-build.42", "6 小时", "自动更新", "立即检测", "立即更新", "emby-service-portal-linux-amd64", "更新说明", "second release", "/admin/update/check", "/admin/update/apply", "/admin/settings/update", "最近检测", "2030-01-01 12:00"} {
 		if !strings.Contains(page, marker) {
 			t.Fatalf("settings page missing %q: %s", marker, page)
 		}

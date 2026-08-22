@@ -15,6 +15,7 @@ import (
 	"github.com/Rst307/emby-service-portal/internal/payments"
 	"github.com/Rst307/emby-service-portal/internal/requests"
 	"github.com/Rst307/emby-service-portal/internal/tmdb"
+	"github.com/Rst307/emby-service-portal/internal/update"
 )
 
 //go:embed templates/*.html
@@ -71,6 +72,8 @@ type ViewData struct {
 	RequestPageSize    int
 	RequestTotalPages  int
 	RequestFilterQuery string
+	// 系统更新（self-update）
+	Update update.State
 }
 
 // PlanEditData contains the editable catalog fields and the original plan metadata.
@@ -133,6 +136,33 @@ func NewTemplates(location *time.Location) (*Templates, error) {
 				return "¥-" + fmt.Sprintf("%d.%02d", (-fen)/100, (-fen)%100)
 			}
 			return fmt.Sprintf("¥%d.%02d", fen/100, fen%100)
+		},
+		"formatBytes": func(size int64) string {
+			if size <= 0 {
+				return "未知大小"
+			}
+			const unit = 1024
+			if size < unit {
+				return fmt.Sprintf("%d B", size)
+			}
+			div, exp := int64(unit), 0
+			for n := size / unit; n >= unit; n /= unit {
+				div *= unit
+				exp++
+			}
+			return fmt.Sprintf("%.1f %cB", float64(size)/float64(div), "KMGTPE"[exp])
+		},
+		"shortDuration": func(d time.Duration) string {
+			if d <= 0 {
+				return "已关闭"
+			}
+			if d%time.Hour == 0 {
+				return fmt.Sprintf("%d 小时", int(d/time.Hour))
+			}
+			if d%time.Minute == 0 {
+				return fmt.Sprintf("%d 分钟", int(d/time.Minute))
+			}
+			return d.String()
 		},
 		"formatPriceInput": func(fen int) string {
 			if fen < 0 {

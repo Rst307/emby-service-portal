@@ -56,9 +56,12 @@ jobs:
           go-version-file: go.mod
           cache: true
       - name: Build executable
+        env:
+          RELEASE_TAG: v0.0.0-build.${{ github.run_id }}
         run: |
           mkdir -p dist
-          go build -trimpath -buildvcs=false -ldflags='-s -w' \
+          go build -trimpath -buildvcs=false \
+            -ldflags="-s -w -X github.com/Rst307/emby-service-portal/internal/buildinfo.Version=$RELEASE_TAG -X github.com/Rst307/emby-service-portal/internal/buildinfo.Commit=${GITHUB_SHA::7}" \
             -o dist/emby-service-portal-linux-amd64 ./cmd/emby-service-portal
           chmod 0755 dist/emby-service-portal-linux-amd64
           sha256sum dist/emby-service-portal-linux-amd64 \
@@ -73,10 +76,44 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  build-windows:
+    name: Build Windows amd64
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: "0"
+      GOOS: windows
+      GOARCH: amd64
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build executable
+        env:
+          RELEASE_TAG: v0.0.0-build.${{ github.run_id }}
+        run: |
+          mkdir -p dist
+          go build -trimpath -buildvcs=false \
+            -ldflags="-s -w -X github.com/Rst307/emby-service-portal/internal/buildinfo.Version=$RELEASE_TAG -X github.com/Rst307/emby-service-portal/internal/buildinfo.Commit=${GITHUB_SHA::7}" \
+            -o dist/emby-service-portal-windows-amd64.exe ./cmd/emby-service-portal
+          sha256sum dist/emby-service-portal-windows-amd64.exe \
+            > dist/emby-service-portal-windows-amd64.exe.sha256
+      - name: Upload Windows executable
+        uses: actions/upload-artifact@v7
+        with:
+          name: emby-service-portal-windows-amd64
+          path: |
+            dist/emby-service-portal-windows-amd64.exe
+            dist/emby-service-portal-windows-amd64.exe.sha256
+          if-no-files-found: error
+          retention-days: 30
+
   release-linux:
-    name: Publish Linux release
+    name: Publish release
     if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
-    needs: build-linux
+    needs: [build-linux, build-windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -86,6 +123,11 @@ jobs:
         with:
           name: emby-service-portal-linux-amd64
           path: dist
+      - name: Download Windows executable
+        uses: actions/download-artifact@v8
+        with:
+          name: emby-service-portal-windows-amd64
+          path: dist
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -94,6 +136,8 @@ jobs:
           gh release create "$RELEASE_TAG" \
             dist/emby-service-portal-linux-amd64 \
             dist/emby-service-portal-linux-amd64.sha256 \
+            dist/emby-service-portal-windows-amd64.exe \
+            dist/emby-service-portal-windows-amd64.exe.sha256 \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "Emby Service Portal $RELEASE_TAG" \

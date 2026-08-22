@@ -20,6 +20,7 @@ import (
 	"github.com/Rst307/emby-service-portal/internal/requests"
 	"github.com/Rst307/emby-service-portal/internal/settings"
 	"github.com/Rst307/emby-service-portal/internal/tmdb"
+	"github.com/Rst307/emby-service-portal/internal/update"
 	"github.com/Rst307/emby-service-portal/internal/web"
 )
 
@@ -32,6 +33,10 @@ type Application struct {
 	accounts *accounts.Service
 	payments *payments.Service
 	requests *requests.Service
+	Updater  *update.Service
+	// restart is buffered so exactly one pending restart request is kept
+	// regardless of whether the web layer or the background worker asks.
+	restart chan struct{}
 }
 
 func New(ctx context.Context, cfg config.Config) (*Application, error) {
@@ -78,12 +83,38 @@ func New(ctx context.Context, cfg config.Config) (*Application, error) {
 	if err := settingsService.Ensure(ctx); err != nil {
 		return closeOnError(fmt.Errorf("seed settings: %w", err))
 	}
-	webServer, err := web.New(authService, portalService, accountService, inviteService, paymentService, settingsService, requestService, tmdbClient, cfg.APIKey, cfg.CookieSecure, cfg.SessionTTL, timeLocation)
+	updateService := update.New(store, update.Options{
+		APIBase:      cfg.UpdateAPIBase,
+		DownloadBase: cfg.UpdateDownloadBase,
+		AutoDefault:  cfg.UpdateAuto,
+		Interval:     cfg.UpdateInterval,
+	})
+	if err := updateService.Ensure(ctx); err != nil {
+		return closeOnError(fmt.Errorf("seed update settings: %w", err))
+	}
+	if err := updateService.Cleanup(); err != nil {
+		return closeOnError(fmt.Errorf("clean update artifacts: %w", err))
+	}
+	webServer, err := web.New(authService, portalService, accountService, inviteService, paymentService, settingsService, requestService, tmdbClient, updateService, cfg.APIKey, cfg.CookieSecure, cfg.SessionTTL, timeLocation)
 	if err != nil {
 		return closeOnError(fmt.Errorf("configure web server: %w", err))
 	}
-	return &Application{store: store, handler: webServer.Handler(), Emby: embyClient, TMDB: tmdbClient, expiry: expiry.New(store, embyClient), accounts: accountService, payments: paymentService, requests: requestService}, nil
+	application := &Application{store: store, handler: webServer.Handler(), Emby: embyClient, TMDB: tmdbClient, expiry: expiry.New(store, embyClient), accounts: accountService, payments: paymentService, requests: requestService, Updater: updateService, restart: make(chan struct{}, 1)}
+	webServer.SetRestartNotifier(application.requestRestart)
+	return application, nil
 }
+
+// requestRestart asks main to shut down and exit with RestartExitCode so the
+// service manager relaunches the (new) binary.
+func (a *Application) requestRestart() {
+	select {
+	case a.restart <- struct{}{}:
+	default:
+	}
+}
+
+// RestartRequested is the channel main selects on after an update is applied.
+func (a *Application) RestartRequested() <-chan struct{} { return a.restart }
 
 func (a *Application) Handler() http.Handler               { return a.handler }
 func (a *Application) RunExpiry(ctx context.Context) error { return a.expiry.RunOnce(ctx) }
@@ -91,4 +122,13 @@ func (a *Application) RunProvisioningRecovery(ctx context.Context) error {
 	return a.accounts.RecoverAccountCreates(ctx)
 }
 func (a *Application) RunPayments(ctx context.Context) error { return a.payments.Reconcile(ctx) }
-func (a *Application) Close() error                          { return a.store.Close() }
+
+// RunUpdateTick runs the periodic self-update check. It returns true when an
+// automatic update was applied and the process should restart.
+func (a *Application) RunUpdateTick(ctx context.Context) (bool, error) {
+	return a.Updater.BackgroundTick(ctx)
+}
+
+// RequestRestart asks main to shut down and exit with RestartExitCode.
+func (a *Application) RequestRestart() { a.requestRestart() }
+func (a *Application) Close() error    { return a.store.Close() }

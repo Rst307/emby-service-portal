@@ -1,0 +1,228 @@
+package update
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"runtime"
+	"strings"
+	"sync"
+	"testing"
+)
+
+func TestCompareVersionsOrdersBuildTags(t *testing.T) {
+	cases := []struct {
+		a, b string
+		want int
+	}{
+		{"v0.0.0-build.1", "v0.0.0-build.2", -1},
+		{"v0.0.0-build.999", "v0.0.0-build.2", 1},
+		{"v0.0.0-build.42", "v0.0.0-build.42", 0},
+		{"v1.2.3", "v0.0.0-build.999999", 1},
+		{"v0.9.0", "v0.10.0", -1},
+		{"dev", "v0.0.0-build.1", -1},
+		{"", "v1.0.0", -1},
+		{"1.0.0", "v1.0.0", 0},
+	}
+	for _, tc := range cases {
+		got := compareVersions(tc.a, tc.b)
+		if got != tc.want {
+			t.Errorf("compareVersions(%q, %q) = %d, want %d", tc.a, tc.b, got, tc.want)
+		}
+	}
+}
+
+func TestParseVersionRejectsGarbage(t *testing.T) {
+	for _, value := range []string{"", "dev", "v", "v1", "v1.x.3", "v1.2.3-beta.1", "v1.2.3-build", "v1.2.3-build.x"} {
+		if _, ok := parseVersion(value); ok {
+			t.Errorf("parseVersion(%q) unexpectedly accepted", value)
+		}
+	}
+}
+
+func TestAssetNameFor(t *testing.T) {
+	cases := []struct {
+		goos, goarch, want string
+	}{
+		{"linux", "amd64", "emby-service-portal-linux-amd64"},
+		{"windows", "amd64", "emby-service-portal-windows-amd64.exe"},
+		{"darwin", "amd64", ""},
+		{"linux", "arm64", ""},
+	}
+	for _, tc := range cases {
+		if got := assetNameFor(tc.goos, tc.goarch); got != tc.want {
+			t.Errorf("assetNameFor(%q, %q) = %q, want %q", tc.goos, tc.goarch, got, tc.want)
+		}
+	}
+}
+
+func TestVerifyChecksum(t *testing.T) {
+	content := []byte("the new binary bytes")
+	ok := fmt.Sprintf("%x  emby-service-portal-linux-amd64\n", sha256.Sum256(content))
+	if err := verifyChecksum(strings.Fields(ok)[0], strings.NewReader(string(content))); err != nil {
+		t.Fatalf("matching checksum rejected: %v", err)
+	}
+	if err := verifyChecksum(strings.Repeat("00", 32), strings.NewReader(string(content))); err == nil {
+		t.Fatal("mismatching checksum accepted")
+	}
+	if err := verifyChecksum("zz", strings.NewReader(string(content))); err == nil {
+		t.Fatal("malformed checksum accepted")
+	}
+}
+
+// fakeStore is a minimal SettingStore for tests.
+type fakeStore struct {
+	mu    sync.Mutex
+	items map[string]string
+}
+
+func newFakeStore() *fakeStore { return &fakeStore{items: map[string]string{}} }
+
+func (f *fakeStore) Setting(_ context.Context, key string) (string, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	value, ok := f.items[key]
+	return value, ok, nil
+}
+
+func (f *fakeStore) SetSetting(_ context.Context, key, value string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.items[key] = value
+	return nil
+}
+
+// testServer serves a GitHub-style releases feed plus the two assets.
+func testServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	assetName := assetNameFor(runtime.GOOS, runtime.GOARCH)
+	if assetName == "" {
+		t.Skipf("platform %s/%s has no asset", runtime.GOOS, runtime.GOARCH)
+	}
+	payload := []byte("fake-binary-content")
+	checksum := fmt.Sprintf("%x  %s\n", sha256.Sum256(payload), assetName)
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/releases"):
+			type asset struct {
+				Name               string `json:"name"`
+				BrowserDownloadURL string `json:"browser_download_url"`
+				Size               int64  `json:"size"`
+			}
+			type release struct {
+				TagName     string  `json:"tag_name"`
+				Prerelease  bool    `json:"prerelease"`
+				Draft       bool    `json:"draft"`
+				PublishedAt string  `json:"published_at"`
+				Body        string  `json:"body"`
+				Assets      []asset `json:"assets"`
+			}
+			releaseURL := server.URL + "/releases/download/v0.0.0-build.2/" + assetName
+			checkURL := server.URL + "/releases/download/v0.0.0-build.2/" + assetName + ".sha256"
+			_ = json.NewEncoder(w).Encode([]release{
+				// Newest is a draft and must be skipped.
+				{TagName: "v0.0.0-build.3", Draft: true},
+				{TagName: "v0.0.0-build.2", PublishedAt: "2026-08-01T00:00:00Z", Body: "second release",
+					Assets: []asset{{Name: assetName, BrowserDownloadURL: releaseURL, Size: int64(len(payload))},
+						{Name: assetName + ".sha256", BrowserDownloadURL: checkURL}}},
+				{TagName: "v0.0.0-build.1", Prerelease: true},
+			})
+		case strings.Contains(r.URL.Path, assetName+".sha256"):
+			w.Write([]byte(checksum))
+		case strings.Contains(r.URL.Path, "/releases/download/"):
+			w.Write(payload)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server
+}
+
+func TestFetchLatestPicksNewestNonDraftAndChecksum(t *testing.T) {
+	server := testServer(t)
+	service := New(newFakeStore(), Options{APIBase: server.URL})
+	release, err := service.fetchLatest(context.Background())
+	if err != nil {
+		t.Fatalf("fetchLatest: %v", err)
+	}
+	if release.Version != "v0.0.0-build.2" {
+		t.Fatalf("Version = %q, want v0.0.0-build.2", release.Version)
+	}
+	if release.Checksum == "" || len(release.Checksum) != 64 {
+		t.Fatalf("checksum not extracted: %q", release.Checksum)
+	}
+	want := fmt.Sprintf("%x", sha256.Sum256([]byte("fake-binary-content")))
+	if release.Checksum != want {
+		t.Fatalf("checksum = %q, want %q", release.Checksum, want)
+	}
+}
+
+func TestCheckAndStateLifecycle(t *testing.T) {
+	server := testServer(t)
+	store := newFakeStore()
+	service := New(store, Options{APIBase: server.URL})
+	ctx := context.Background()
+	if err := service.Check(ctx); err != nil {
+		t.Fatalf("Check: %v", err)
+	}
+	state := service.Snapshot(ctx)
+	if !state.Available() {
+		t.Fatalf("update should be available: %+v", state)
+	}
+	if state.ApplyBlocked() != "" {
+		t.Fatalf("unexpected ApplyBlocked: %s", state.ApplyBlocked())
+	}
+	// A failed check clears the availability and records the error.
+	broken := New(newFakeStore(), Options{APIBase: "http://127.0.0.1:1"})
+	if err := broken.Check(ctx); err == nil {
+		t.Fatal("Check against dead source should fail")
+	}
+	brokenState := broken.Snapshot(ctx)
+	if brokenState.Available() || brokenState.CheckError == "" {
+		t.Fatalf("broken state should not be available: %+v", brokenState)
+	}
+}
+
+func TestAutoFlagPersistenceAndSeeding(t *testing.T) {
+	store := newFakeStore()
+	ctx := context.Background()
+	service := New(store, Options{AutoDefault: true})
+	if err := service.Ensure(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if !service.Auto(ctx) {
+		t.Fatal("Ensure should seed the env default")
+	}
+	if err := service.SetAuto(ctx, false); err != nil {
+		t.Fatal(err)
+	}
+	if service.Auto(ctx) {
+		t.Fatal("SetAuto(false) should persist")
+	}
+	// Seeding does not overwrite an existing value.
+	service.Ensure(ctx)
+	if service.Auto(ctx) {
+		t.Fatal("Ensure must not overwrite stored value")
+	}
+}
+
+func TestApplyBlockedReasons(t *testing.T) {
+	state := State{}
+	if got := state.ApplyBlocked(); got == "" {
+		t.Fatal("empty state should be blocked")
+	}
+	state.Latest = &Release{Version: "v1.0.0", Checksum: "ok"}
+	state.CheckError = "network"
+	if got := state.ApplyBlocked(); got != "最近一次检测失败" {
+		t.Fatalf("unexpected blocked reason: %s", got)
+	}
+	state.CheckError = ""
+	if got := state.ApplyBlocked(); got != "" {
+		t.Fatalf("available state should not be blocked: %s", got)
+	}
+}

@@ -53,6 +53,7 @@ func (s *Server) adminSettingsPage(w http.ResponseWriter, r *http.Request) {
 		TimeZoneNow:     time.Now().In(location).Format("2006-01-02 15:04:05"),
 		TimeZoneOptions: timeZoneOptions(name),
 		PaymentSettings: paymentSettings,
+		Update:          s.updater.Snapshot(r.Context()),
 	})
 }
 
@@ -78,6 +79,7 @@ func (s *Server) adminSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 			TimeZoneNow:     time.Now().In(location).Format("2006-01-02 15:04:05"),
 			TimeZoneOptions: timeZoneOptions(current),
 			PaymentSettings: paymentSettings,
+			Update:          s.updater.Snapshot(r.Context()),
 		}, http.StatusBadRequest)
 		return
 	}
@@ -109,6 +111,7 @@ func (s *Server) adminPaymentSettingsUpdate(w http.ResponseWriter, r *http.Reque
 		s.templates.RenderStatus(w, "settings", admin.ViewData{
 			CSRFToken: csrfFromRequest(r), Error: "支付设置保存失败：" + err.Error(), TimeZone: name,
 			TimeZoneNow: time.Now().In(location).Format("2006-01-02 15:04:05"), TimeZoneOptions: timeZoneOptions(name), PaymentSettings: paymentSettings,
+			Update: s.updater.Snapshot(r.Context()),
 		}, http.StatusBadRequest)
 		return
 	}

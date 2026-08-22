@@ -2088,3 +2088,83 @@ body.seerr:hover::-webkit-scrollbar-thumb { background-color: #6b7280; }
 .admin-body .actions { gap: 8px; }
 .admin-body .table-link.danger { color: #cf1322; }
 .admin-body .table-link.danger:hover { color: #a8071a; }
+
+/* ---------- 系统更新（管理端） ---------- */
+
+.admin-body .badge.warn { border-color: #ffe58f; background: #fffbe6; color: #d48806; }
+.admin-body .badge.updating { border-color: #91d5ff; background: #e6f7ff; color: #0958d9; }
+
+.update-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 10px 16px;
+  margin: 2px 0 16px;
+  padding: 13px 15px;
+  border: 1px solid var(--border, rgba(128, 135, 150, 0.18));
+  border-radius: 9px;
+  background: rgba(128, 135, 150, 0.045);
+}
+.update-facts div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.update-facts dt { font-size: 0.72rem; color: var(--text-muted, #8b93a7); }
+.update-facts dd { margin: 0; font-size: 0.85rem; overflow-wrap: anywhere; }
+
+.update-notes { margin: 0 0 14px; }
+.update-notes summary { cursor: pointer; font-size: 0.8rem; color: var(--accent, #1677ff); }
+.update-notes pre {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  max-height: 12rem;
+  overflow: auto;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.35);
+  color: #c9d1d9;
+  font-size: 0.76rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.checkbox-field {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.checkbox-field input { width: auto; }
+
+.update-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.update-actions form { margin: 0; }
+.admin-body .update-actions button { box-shadow: none; }
+.admin-body .update-actions button.danger {
+  border-color: rgba(241, 122, 114, 0.4);
+  background: rgba(241, 122, 114, 0.12);
+  color: #ffaaa3;
+}
+.admin-body .update-actions button.danger:hover:not(:disabled) { background: rgba(241, 122, 114, 0.22); }
+
+.update-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+  padding: 11px 16px;
+  border: 1px solid #ffe58f;
+  border-radius: 10px;
+  background: #fdfbe9;
+  color: #874d00;
+  font-size: 0.85rem;
+}
+.update-banner p { margin: 0; }
+.update-banner .button-link {
+  flex-shrink: 0;
+  padding: 6px 13px;
+  border-radius: 7px;
+  background: #d48806;
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+}
+.update-banner .button-link:hover { background: #ad6800; }

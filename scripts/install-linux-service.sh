@@ -25,8 +25,11 @@ if ! id -u "$SERVICE_USER" >/dev/null 2>&1; then
   useradd --system --home-dir /nonexistent --shell /usr/sbin/nologin "$SERVICE_USER"
 fi
 
-install -d -o root -g root -m 0755 "$APP_DIR"
+install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0750 "$APP_DIR"
 install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0700 "$DATA_DIR"
+# The binary and .env stay root-owned; the service user only needs write
+# access to the directory (not the files) so the built-in self-update can
+# rename the binary into place.
 chown root:root "$BINARY" "$ENV_FILE"
 chmod 0755 "$BINARY"
 chmod 0600 "$ENV_FILE"
@@ -60,7 +63,8 @@ LockPersonality=true
 CapabilityBoundingSet=
 AmbientCapabilities=
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
-ReadWritePaths=$DATA_DIR
+# $APP_DIR must be writable for the built-in self-update (binary swap).
+ReadWritePaths=$APP_DIR $DATA_DIR
 
 [Install]
 WantedBy=multi-user.target

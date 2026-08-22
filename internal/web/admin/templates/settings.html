@@ -86,6 +86,52 @@
         </form>
       </div>
     </section>
+
+    <section class="panel update-settings-panel">
+      <header class="panel-header">
+        <div>
+          <h2 class="panel-title">系统更新</h2>
+          <p class="panel-copy">从 GitHub Releases 检测新版本：先下载并校验 SHA-256，再替换程序并重启服务。程序目录不可写时（例如 Docker 镜像）自动更新不可用，请手动替换。</p>
+        </div>
+        {{if .Update.Applied}}<span class="badge pending">重启中</span>
+        {{else if .Update.Updating}}<span class="badge pending">更新中</span>
+        {{else if .Update.Available}}<span class="badge warn">可更新</span>
+        {{else if .Update.CheckError}}<span class="badge off">检测失败</span>
+        {{else if .Update.Latest}}<span class="badge enabled">已是最新</span>
+        {{else}}<span class="badge off">未检测</span>{{end}}
+      </header>
+      <div class="panel-body">
+        <dl class="update-facts">
+          <div><dt>当前版本</dt><dd><code>{{.Update.CurrentVersion}}</code></dd></div>
+          {{if .Update.Latest}}
+          <div><dt>最新版本</dt><dd><code>{{.Update.Latest.Version}}</code>{{if .Update.Latest.Prerelease}} <span class="badge pending">预发布</span>{{end}}</dd></div>
+          <div><dt>发布时间</dt><dd>{{formatTime .Update.Latest.PublishedAt "2006-01-02 15:04"}}</dd></div>
+          <div><dt>安装包</dt><dd><code>{{.Update.Latest.AssetName}}</code>（{{formatBytes .Update.Latest.AssetSize}}）</dd></div>
+          {{else}}<div><dt>最新版本</dt><dd>{{if .Update.CheckError}}获取失败{{else}}尚未检测{{end}}</dd></div>{{end}}
+          <div><dt>最近检测</dt><dd>{{if .Update.LastCheck.IsZero}}尚未检测{{else}}{{formatTime .Update.LastCheck "2006-01-02 15:04:05"}}{{end}}</dd></div>
+        </dl>
+        {{if and .Update.Latest .Update.Latest.Notes}}<details class="update-notes"><summary>更新说明</summary><pre>{{.Update.Latest.Notes}}</pre></details>{{end}}
+        {{if .Update.CheckError}}<p class="subtle">检测失败：{{.Update.CheckError}}</p>{{end}}
+        <form method="post" action="/admin/settings/update" class="stack-form">
+          <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+          <label class="field checkbox-field"><input type="checkbox" name="auto_update" value="1"{{if .Update.AutoUpdate}} checked{{end}}> 自动更新：后台每 {{shortDuration .Update.Interval}} 检测一次，发现新版本自动安装并重启服务</label>
+          <div class="form-actions">
+            <button type="submit">保存自动更新设置</button>
+          </div>
+        </form>
+        <div class="update-actions">
+          <form method="post" action="/admin/update/check">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+            <button type="submit"{{if .Update.Updating}} disabled{{end}}>立即检测</button>
+          </form>
+          <form method="post" action="/admin/update/apply">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+            <button type="submit" class="danger"{{if .Update.ApplyBlocked}} disabled title="{{.Update.ApplyBlocked}}"{{end}}>立即更新{{if .Update.ApplyBlocked}}（{{.Update.ApplyBlocked}}）{{end}}</button>
+          </form>
+        </div>
+        <p class="subtle">立即更新会先下载并校验新版本，替换程序后自动重启，页面会短暂中断（约 5–10 秒）。系统服务（systemd 等）会自动拉起新版本；Windows 下由更新助手自动完成替换与重启。</p>
+      </div>
+    </section>
   </main>
 </body>
 </html>

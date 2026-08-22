@@ -33,5 +33,6 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 		data.PaymentPaidCount = orders.PaidCount
 		data.PaymentRevenueFen = orders.PaidAmountFen
 	}
+	data.Update = s.updater.Snapshot(r.Context())
 	s.templates.Render(w, "dashboard", data)
 }

@@ -18,6 +18,7 @@ import (
 
 	"github.com/Rst307/emby-service-portal/internal/accounts"
 	"github.com/Rst307/emby-service-portal/internal/auth"
+	"github.com/Rst307/emby-service-portal/internal/buildinfo"
 	"github.com/Rst307/emby-service-portal/internal/domain"
 	"github.com/Rst307/emby-service-portal/internal/invites"
 	"github.com/Rst307/emby-service-portal/internal/payments"
@@ -26,6 +27,7 @@ import (
 	"github.com/Rst307/emby-service-portal/internal/requests"
 	"github.com/Rst307/emby-service-portal/internal/settings"
 	"github.com/Rst307/emby-service-portal/internal/tmdb"
+	"github.com/Rst307/emby-service-portal/internal/update"
 	"github.com/Rst307/emby-service-portal/internal/web/admin"
 )
 
@@ -42,6 +44,7 @@ type Server struct {
 	requests     *requests.Service
 	tmdb         *tmdb.Client
 	settings     *settings.Service
+	updater      *update.Service
 	apiKey       string
 	templates    *admin.Templates
 	cookieSecure bool
@@ -49,9 +52,18 @@ type Server struct {
 	loginLimit   *ratelimit.Limiter
 	publicLimit  *ratelimit.Limiter
 	requestLimit *ratelimit.Limiter
+	// notifyRestart asks main to exit with RestartExitCode after an applied
+	// update; set by the app composition root.
+	notifyRestart func()
 }
 
-func New(authService *auth.Service, portalService *portal.Service, accountService *accounts.Service, inviteService *invites.Service, paymentService *payments.Service, settingsService *settings.Service, requestService *requests.Service, tmdbClient *tmdb.Client, apiKey string, cookieSecure bool, sessionTTL time.Duration, timeLocation *time.Location) (*Server, error) {
+// SetRestartNotifier installs the callback invoked after a successful update
+// so the process can shut down and restart with the new binary.
+func (s *Server) SetRestartNotifier(notify func()) {
+	s.notifyRestart = notify
+}
+
+func New(authService *auth.Service, portalService *portal.Service, accountService *accounts.Service, inviteService *invites.Service, paymentService *payments.Service, settingsService *settings.Service, requestService *requests.Service, tmdbClient *tmdb.Client, updater *update.Service, apiKey string, cookieSecure bool, sessionTTL time.Duration, timeLocation *time.Location) (*Server, error) {
 	if timeLocation == nil {
 		timeLocation, _ = time.LoadLocation("Asia/Shanghai")
 	}
@@ -61,7 +73,7 @@ func New(authService *auth.Service, portalService *portal.Service, accountServic
 	}
 	return &Server{
 		auth: authService, portal: portalService, accounts: accountService, invites: inviteService, payments: paymentService,
-		requests: requestService, tmdb: tmdbClient, settings: settingsService, apiKey: apiKey, templates: templates, cookieSecure: cookieSecure, sessionTTL: sessionTTL,
+		requests: requestService, tmdb: tmdbClient, settings: settingsService, updater: updater, apiKey: apiKey, templates: templates, cookieSecure: cookieSecure, sessionTTL: sessionTTL,
 		loginLimit: ratelimit.New(10, time.Minute), publicLimit: ratelimit.New(20, time.Minute), requestLimit: ratelimit.New(20, time.Hour),
 	}, nil
 }
@@ -121,6 +133,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /admin/settings", s.adminSettingsPage)
 	mux.HandleFunc("POST /admin/settings", s.adminSettingsUpdate)
 	mux.HandleFunc("POST /admin/settings/payment", s.adminPaymentSettingsUpdate)
+	mux.HandleFunc("POST /admin/settings/update", s.adminUpdateSettingsUpdate)
+	mux.HandleFunc("POST /admin/update/check", s.adminUpdateCheck)
+	mux.HandleFunc("POST /admin/update/apply", s.adminUpdateApply)
 	mux.HandleFunc("GET /portal/login", s.portalLoginPage)
 	mux.HandleFunc("POST /portal/login", s.portalLogin)
 	mux.HandleFunc("GET /portal/", s.portalDashboard)
@@ -151,7 +166,7 @@ func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
 }
 func (s *Server) apiHealth(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "version": "dev"})
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "version": buildinfo.Version})
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, target any) bool {

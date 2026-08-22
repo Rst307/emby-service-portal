@@ -40,7 +40,27 @@ type Config struct {
 	TmdbHTTPProxy string
 	// TmdbTimeout bounds each TMDB API request (default 10s).
 	TmdbTimeout time.Duration
+	// UpdateAPIBase is the GitHub API root used for release detection
+	// (default https://api.github.com). Point it at a mirror where the public
+	// host is slow or blocked (e.g. mainland China).
+	UpdateAPIBase string
+	// UpdateDownloadBase optionally replaces the release asset download root;
+	// when set, assets resolve as
+	// <base>/repos/Rst307/emby-service-portal/releases/download/<tag>/<asset>
+	// (useful behind a GitHub release proxy).
+	UpdateDownloadBase string
+	// UpdateInterval is how often the background check runs (default 6h).
+	// The check always only detects; auto-install additionally requires the
+	// stored auto-update flag (ESP_UPDATE_AUTO seeds it on first run).
+	UpdateInterval time.Duration
+	// UpdateAuto seeds the stored auto-update flag on first run (default
+	// false). The flag can be toggled at runtime in 系统设置.
+	UpdateAuto bool
 }
+
+// DefaultUpdateInterval is the update check interval used when
+// ESP_UPDATE_INTERVAL is unset.
+const DefaultUpdateInterval = 6 * time.Hour
 
 func FromEnv() (Config, error) {
 	cookieSecure, err := boolEnv("ESP_COOKIE_SECURE", true)
@@ -52,6 +72,14 @@ func FromEnv() (Config, error) {
 		return Config{}, err
 	}
 	tmdbTimeout, err := durationEnv("ESP_TMDB_TIMEOUT", 10*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
+	updateAuto, err := boolEnv("ESP_UPDATE_AUTO", false)
+	if err != nil {
+		return Config{}, err
+	}
+	updateInterval, err := durationEnv("ESP_UPDATE_INTERVAL", DefaultUpdateInterval)
 	if err != nil {
 		return Config{}, err
 	}
@@ -73,6 +101,10 @@ func FromEnv() (Config, error) {
 		TmdbImageBaseURL:      os.Getenv("ESP_TMDB_IMAGE_BASE_URL"),
 		TmdbHTTPProxy:         os.Getenv("ESP_TMDB_HTTP_PROXY"),
 		TmdbTimeout:           tmdbTimeout,
+		UpdateAPIBase:         value("ESP_UPDATE_API_BASE", "https://api.github.com"),
+		UpdateDownloadBase:    os.Getenv("ESP_UPDATE_DOWNLOAD_BASE"),
+		UpdateInterval:        updateInterval,
+		UpdateAuto:            updateAuto,
 	}
 	return cfg, cfg.Validate()
 }
@@ -129,6 +161,18 @@ func (c Config) Validate() error {
 	}
 	if _, err := c.TimeLocation(); err != nil {
 		return err
+	}
+	for name, val := range map[string]string{
+		"ESP_UPDATE_API_BASE":      c.UpdateAPIBase,
+		"ESP_UPDATE_DOWNLOAD_BASE": c.UpdateDownloadBase,
+	} {
+		if strings.TrimSpace(val) == "" {
+			continue
+		}
+		u, err := url.Parse(val)
+		if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+			return fmt.Errorf("%s must be an absolute HTTP(S) URL", name)
+		}
 	}
 	return nil
 }

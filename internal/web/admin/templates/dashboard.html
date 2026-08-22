@@ -15,6 +15,13 @@
     </div>
   </section>
 
+  {{if and .Update.Available .Update.Latest}}
+  <section class="update-banner" role="status">
+    <p><strong>发现新版本 {{.Update.Latest.Version}}</strong>（当前 {{.Update.CurrentVersion}}），可在系统设置中一键更新。</p>
+    <a class="button-link" href="/admin/settings">前往更新 →</a>
+  </section>
+  {{end}}
+
   <section class="stat-grid">
     <article class="stat-card total">
       <p class="stat-label">业务账号</p>

@@ -20,6 +20,7 @@
 - 对接 `wxpay-payment-center`：管理员可配置支付中心商户凭证，维护不限数量的激活码购买方案与订阅续费方案。
 - 支付成功后自动生成一次性激活码，或为已验证的 Emby 用户完成订阅续费；支付回调验签、订单金额快照和重复回调幂等处理均在本地完成。
 - 用户中心「求剧」：登录用户可搜索 TMDB 影视库，页面按 TMDB 编号对照当前 Emby 库存标记「已在库 / 可求剧」；未入库的影视可一键提交求剧，管理员在「求剧管理」查看剧名、TMDB 编号、求剧用户与时间，并标记已入库或驳回。需要 `ESP_TMDB_API_KEY`。
+- 自更新：后台自动检测 GitHub Releases 新版本（可配置镜像源），管理后台「系统设置 → 系统更新」一键检测/安装，安装前强制 SHA-256 校验，安装后自动重启；可开启自动更新，发现新版本即自动下载安装并重启。
 
 ## 快速开始
 
@@ -117,16 +118,7 @@ ESP_CREDENTIAL_PREVIOUS_MASTER_KEY=旧的主密钥
 
 ## Linux / systemd 部署
 
-每次代码推送到 `main` 后，GitHub Actions 会自动生成静态 Linux amd64 可执行文件，并创建一个带构建编号的 GitHub 预发布 Release。直接在仓库的 [Releases](https://github.com/Rst307/emby-service-portal/releases) 页面下载最新版本；每个 Release 同时包含可执行文件和 SHA-256 校验文件。Pull Request 只执行检查，不会发布 Release；也可以在 Actions 页面通过 **Run workflow** 手动构建并发布。
-
-本地构建静态 Linux amd64 二进制：
-
-```bash
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-  go build -trimpath -buildvcs=false -ldflags='-s -w' \
-  -o dist/emby-service-portal-linux-amd64 ./cmd/emby-service-portal
-```
-
+每次代码推送到 `main` 后，GitHub Actions 会自动生成静态 Linux amd64 与 Windows amd64 可执行文件，并创建一个带构建编号的 GitHub 预发布 Release。直接在仓库的 [Releases](https://github.com/Rst307/emby-service-portal/releases) 页面下载最新版本；每个 Release 同时包含可执行文件和对应的 SHA-256 校验文件。Pull Request 只执行检查，不会发布 Release；也可以在 Actions 页面通过 **Run workflow** 手动构建并发布。
 ### Docker 运行
 
 镜像为多阶段构建的静态二进制 + Alpine 运行层（含 CA 证书和 IANA 时区数据），以非 root 用户运行：
@@ -161,6 +153,27 @@ sudo systemctl status emby-service-portal
 ```
 
 反向代理到 `127.0.0.1:8081` 并启用 HTTPS。不要让应用端口直接暴露到不可信网络。
+
+## 自更新（系统设置 → 系统更新）
+
+程序内置更新检测与安装：后台周期性查询 GitHub Releases，找出非草稿的最新发布（含预发布构建，本项目每合并一次 `main` 就发布一个），按平台匹配安装包（`linux-amd64` / `windows-amd64.exe`），下载时先与 Release 附带的 `.sha256` 校验和比对，一致后才替换程序并重启。
+
+- **检测**：默认每 6 小时一次（`ESP_UPDATE_INTERVAL`），也可在后台点「立即检测」。检测结果缓存在内存中，管理后台显示当前版本、最新版本、发布时间与更新说明。
+- **手动更新**：后台「立即更新」按钮下载 → 校验 → 替换 → 自动重启，期间服务中断约 5–10 秒。
+- **自动更新**：后台勾选「自动更新」（或首次运行设置 `ESP_UPDATE_AUTO=true`），发现新版本即自动完成上面的流程。
+- **重启机制**：Linux 在进程内完成二进制替换后以退出码 17 退出，由 systemd（`Restart=on-failure`）或其他守护进程拉起新版本；Windows 由程序生成的独立更新助手脚本在旧进程退出后完成替换并重新启动。
+- **安全**：安装前强制校验 SHA-256；校验失败或发布缺少校验文件时中止更新。
+- **受限环境**：程序目录不可写时（如 Docker 镜像内 `/usr/local/bin`、未授权的 systemd 沙箱），更新会明确报错，建议改用重建镜像或手动替换的方式。Linux systemd 部署请使用更新过的 `scripts/install-linux-service.sh`（已开放程序目录写权限用于自更新）。Docker 部署可通过 `ESP_UPDATE_INTERVAL=0` 完全关闭检测。
+
+中国大陆网络无法直连 GitHub 时，可配置镜像源：
+
+```bash
+# 例：API 走镜像，安装包仍走官方源（或同时配置下载代理）
+ESP_UPDATE_API_BASE=https://api.github.com
+ESP_UPDATE_DOWNLOAD_BASE=
+```
+
+其余变量（`ESP_UPDATE_API_BASE`、`ESP_UPDATE_DOWNLOAD_BASE`、`ESP_UPDATE_INTERVAL`、`ESP_UPDATE_AUTO`）说明见 [.env.example](.env.example)。
 
 ## 外部 API
 
@@ -210,11 +223,12 @@ make test     # 单元与验收测试
 make vet      # 静态检查
 make race     # 竞态检测
 make check    # 完整质量门禁（等价 CI 前四步）
-make build    # 本机二进制
+make build    # 本机二进制（内嵌 git 版本）
 make linux    # 静态 Linux amd64 二进制
+make windows  # 静态 Windows amd64 二进制
 ```
 
-GitHub Actions 会运行格式检查、依赖校验、测试、race 检测、覆盖率、`staticcheck`、`govulncheck`，并上传可下载的 Linux amd64 构建产物。
+GitHub Actions 会运行格式检查、依赖校验、测试、race 检测、覆盖率、`staticcheck`、`govulncheck`，并为每个 `main` 推送发布带版本号的 Linux/Windows 构建产物。
 
 ## 项目结构
 
@@ -224,10 +238,14 @@ internal/
 ├── app/                  模块装配（组合根）
 ├── accounts/             业务账号生命周期与注册 Saga
 ├── auth/                 管理员认证与会话
+├── buildinfo/            构建版本信息（-ldflags 注入）
 ├── config/               环境变量配置
 ├── credentials/          加密凭据 Vault
 ├── domain/               领域模型（实体、领域错误、输入/查询结构体）
 ├── emby/                 Emby HTTP 客户端
+├── settings/             运行时设置（时区、自动更新开关）
+├── update/               自更新：Release 检测、SHA-256 校验、安装与重启
+├── tmdb/                 TMDB 客户端（求剧搜索与海报）
 ├── expiry/               到期和 Emby 同步 worker
 ├── invites/              邀请码及兑换
 ├── paymentcenter/        R Pay 支付中心 HTTP 适配器
@@ -243,7 +261,6 @@ internal/
 ├── portal/               用户中心
 ├── requests/             求剧（TMDB 搜索与求剧记录）
 ├── ratelimit/            登录/注册/续费限流
-├── settings/             显示时区设置
 └── web/                  HTTP 层（按页面域拆分）
     ├── web.go            Server、路由、中间件与共享助手
     ├── api.go            REST API（/api/v1/*）
