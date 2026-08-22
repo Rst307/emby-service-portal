@@ -50,6 +50,9 @@ func main() {
 			if err := application.RunPayments(workerContext); err != nil && !errors.Is(err, context.Canceled) {
 				log.Printf("reconcile payment orders: %v", err)
 			}
+			if err := application.RunLibraryWatch(workerContext); err != nil && !errors.Is(err, context.Canceled) {
+				log.Printf("scan library updates: %v", err)
+			}
 			select {
 			case <-workerContext.Done():
 				return

@@ -73,6 +73,7 @@ func (s *Store) migrate(ctx context.Context) error {
 		{"0014_media_requests", "migrations/0014_media_requests.sql"},
 		{"0015_media_request_kind", "migrations/0015_media_request_kind.sql"},
 		{"0016_media_request_users", "migrations/0016_media_request_users.sql"},
+		{"0017_recently_added", "migrations/0017_recently_added.sql"},
 	}
 	for _, migration := range migrations {
 		if err := s.applyMigration(ctx, migration.version, migration.file); err != nil {

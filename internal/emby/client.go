@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -59,6 +60,28 @@ type EpisodeLibrary interface {
 // establish whether the exact requested name was created before a lost reply.
 type UserFinder interface {
 	FindUserByUsername(ctx context.Context, username string) (User, error)
+}
+
+// RecentlyAddedItem is the minimal shape of one newly added library item. The
+// 最近更新 feed on the portal and the request auto-fulfillment rely on it;
+// TmdbID is 0 when Emby has no TMDB provider ID for the item.
+type RecentlyAddedItem struct {
+	ID   string
+	Name string
+	// Type uses the TMDB vocabulary (movie | tv) so it matches media_requests
+	// rows directly.
+	Type string
+	// TmdbID is 0 when the item carries no TMDB provider ID.
+	TmdbID int64
+	// DateCreated is the library-created time (UTC). Zero when Emby did not
+	// return a parseable timestamp; callers fall back to their own clock.
+	DateCreated time.Time
+}
+
+// LibraryWatcher reports the newest items added to the Emby library. The
+// recent-additions feed and automatic request fulfillment rely on it.
+type LibraryWatcher interface {
+	RecentlyAdded(ctx context.Context, limit int) ([]RecentlyAddedItem, error)
 }
 
 type PasswordSetter interface {
@@ -341,6 +364,72 @@ func decodeSeasonEpisodes(response *http.Response, seasons map[int]map[int]bool)
 	return nil
 }
 
+// RecentlyAdded returns the newest library items of the main media types
+// (Movie, Series), newest first, using Emby's DateCreated field so the portal
+// 最近更新 feed reflects actual library additions. It relies on Providers
+// being returned; items without a TMDB provider ID still appear, with
+// TmdbID = 0.
+func (c *HTTPClient) RecentlyAdded(ctx context.Context, limit int) ([]RecentlyAddedItem, error) {
+	if limit < 1 {
+		limit = 30
+	}
+	endpoint := c.endpoint("Items")
+	query := endpoint.Query()
+	query.Set("Recursive", "true")
+	query.Set("IncludeItemTypes", "Movie,Series")
+	query.Set("SortBy", "DateCreated")
+	query.Set("SortOrder", "Descending")
+	query.Set("Fields", "ProviderIds,DateCreated")
+	query.Set("Limit", strconv.Itoa(limit))
+	endpoint.RawQuery = query.Encode()
+	request, err := c.request(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	response, err := c.httpClient.Do(request)
+	if err != nil {
+		return nil, fmt.Errorf("query Emby recent additions: %w", err)
+	}
+	items, err := decodeItemsWithProviderIDs(response)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]RecentlyAddedItem, 0, len(items))
+	for _, item := range items {
+		created, _ := parseEmbyTime(item.DateCreated)
+		tmdbID, _ := strconv.ParseInt(item.ProviderIDs["Tmdb"], 10, 64)
+		out = append(out, RecentlyAddedItem{
+			ID: item.ID, Name: item.Name, Type: normalizeMediaType(item.Type),
+			TmdbID: tmdbID, DateCreated: created,
+		})
+	}
+	return out, nil
+}
+
+// parseEmbyTime parses the timestamp shapes Emby emits for BaseItem dates: the
+// legacy .NET form "/Date(1423987200000)/" (milliseconds since the Unix
+// epoch) and ISO 8601 with fractional seconds (e.g.
+// "2021-08-16T18:04:16.0000000Z"). Unrecognized values yield a zero time so
+// callers can apply their own fallback.
+func parseEmbyTime(value string) (time.Time, error) {
+	value = strings.TrimSpace(value)
+	if strings.HasPrefix(value, "/Date(") {
+		raw := strings.TrimPrefix(value, "/Date(")
+		raw = strings.TrimSuffix(raw, ")/")
+		ms, err := strconv.ParseInt(strings.TrimSpace(raw), 10, 64)
+		if err != nil {
+			return time.Time{}, fmt.Errorf("unrecognized Emby timestamp %q", value)
+		}
+		return time.UnixMilli(ms).UTC(), nil
+	}
+	for _, layout := range []string{time.RFC3339Nano, "2006-01-02T15:04:05.9999999"} {
+		if parsed, err := time.Parse(layout, value); err == nil {
+			return parsed.UTC(), nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("unrecognized Emby timestamp %q", value)
+}
+
 // normalizeMediaType maps an Emby item type to the TMDB media-type vocabulary
 // used by the request records (Movie -> movie, Series -> tv).
 func normalizeMediaType(embyType string) string {
@@ -352,9 +441,13 @@ func normalizeMediaType(embyType string) string {
 	}
 }
 
-// libraryItem is the minimal Emby item shape needed to build a provider-ID set.
+// libraryItem is the minimal Emby item shape needed for provider-ID checks and
+// the recent-additions feed.
 type libraryItem struct {
+	ID          string            `json:"Id"`
+	Name        string            `json:"Name"`
 	Type        string            `json:"Type"`
+	DateCreated string            `json:"DateCreated"`
 	ProviderIDs map[string]string `json:"ProviderIds"`
 }
 

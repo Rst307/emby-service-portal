@@ -17,6 +17,7 @@ import (
 	"github.com/Rst307/emby-service-portal/internal/payments"
 	"github.com/Rst307/emby-service-portal/internal/persistence/sqlite"
 	"github.com/Rst307/emby-service-portal/internal/portal"
+	"github.com/Rst307/emby-service-portal/internal/recent"
 	"github.com/Rst307/emby-service-portal/internal/requests"
 	"github.com/Rst307/emby-service-portal/internal/settings"
 	"github.com/Rst307/emby-service-portal/internal/tmdb"
@@ -33,6 +34,7 @@ type Application struct {
 	accounts *accounts.Service
 	payments *payments.Service
 	requests *requests.Service
+	recent   *recent.Service
 	Updater  *update.Service
 	// restart is buffered so exactly one pending restart request is kept
 	// regardless of whether the web layer or the background worker asks.
@@ -75,6 +77,7 @@ func New(ctx context.Context, cfg config.Config) (*Application, error) {
 		tmdb.SetPosterBaseURL(cfg.TmdbImageBaseURL)
 	}
 	requestService := requests.New(store, tmdbClient, embyClient)
+	recentService := recent.New(store, embyClient, cfg.EmbyBaseURL)
 	timeLocation, err := cfg.TimeLocation()
 	if err != nil {
 		return closeOnError(err)
@@ -96,11 +99,11 @@ func New(ctx context.Context, cfg config.Config) (*Application, error) {
 	if err := updateService.Cleanup(); err != nil {
 		return closeOnError(fmt.Errorf("clean update artifacts: %w", err))
 	}
-	webServer, err := web.New(authService, portalService, accountService, inviteService, paymentService, settingsService, requestService, tmdbClient, updateService, cfg.APIKey, cfg.CookieSecure, cfg.SessionTTL, timeLocation)
+	webServer, err := web.New(authService, portalService, accountService, inviteService, paymentService, settingsService, requestService, recentService, tmdbClient, updateService, cfg.EmbyBaseURL, cfg.APIKey, cfg.CookieSecure, cfg.SessionTTL, timeLocation)
 	if err != nil {
 		return closeOnError(fmt.Errorf("configure web server: %w", err))
 	}
-	application := &Application{store: store, handler: webServer.Handler(), Emby: embyClient, TMDB: tmdbClient, expiry: expiry.New(store, embyClient), accounts: accountService, payments: paymentService, requests: requestService, Updater: updateService, restart: make(chan struct{}, 1)}
+	application := &Application{store: store, handler: webServer.Handler(), Emby: embyClient, TMDB: tmdbClient, expiry: expiry.New(store, embyClient), accounts: accountService, payments: paymentService, requests: requestService, recent: recentService, Updater: updateService, restart: make(chan struct{}, 1)}
 	webServer.SetRestartNotifier(application.requestRestart)
 	return application, nil
 }
@@ -128,6 +131,13 @@ func (a *Application) RunPayments(ctx context.Context) error { return a.payments
 // automatic update was applied and the process should restart.
 func (a *Application) RunUpdateTick(ctx context.Context) (bool, error) {
 	return a.Updater.BackgroundTick(ctx)
+}
+
+// RunLibraryWatch scans Emby for newly added items: it records the 最近更新
+// feed and auto-fulfills pending media requests whose TMDB title matches a
+// new addition.
+func (a *Application) RunLibraryWatch(ctx context.Context) error {
+	return a.recent.ScanOnce(ctx)
 }
 
 // RequestRestart asks main to shut down and exit with RestartExitCode.

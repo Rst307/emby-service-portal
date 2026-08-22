@@ -356,3 +356,26 @@ document.addEventListener("submit", (event) => {
     if (event.target.matches("[data-seerr-submit]")) fire();
   });
 })();
+
+/* ============================================================
+   最近更新海报加载失败时显示首字占位
+   （data-fallback-poster；捕获阶段监听，避免内联脚本被 CSP 拦截）
+   ============================================================ */
+
+document.addEventListener(
+  "error",
+  (event) => {
+    const img = event.target;
+    if (!(img instanceof HTMLImageElement) || !img.dataset.fallbackPoster) return;
+    const wrapper = img.closest(".seerr-recent-poster");
+    if (!wrapper) return;
+    img.style.display = "none";
+    if (wrapper.querySelector(".seerr-result-placeholder")) return;
+    const placeholder = document.createElement("span");
+    placeholder.className = "seerr-result-placeholder";
+    placeholder.setAttribute("aria-hidden", "true");
+    placeholder.textContent = (img.alt || "?").trim().charAt(0) || "?";
+    wrapper.appendChild(placeholder);
+  },
+  true
+);

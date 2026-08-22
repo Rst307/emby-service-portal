@@ -55,4 +55,8 @@ _Avoid_: media request ticket, suggestion
 **催更**:
 A 求剧 (kind `missing`) submitted through the 用户中心 for a 电视/动漫 already partly in the Emby library, snapshotting the exact missing-episode list (e.g. `S01E04、S01E05`). It is the same `media_requests` row as 求剧, distinguished by `kind`; a series with no missing aired episodes cannot be 催更'd and shows as 已在库.
 
+**最近更新**:
+The library feed recorded by the periodic scan of Emby's newest additions (Movie/Series by `DateCreated`). It powers the 最近更新 section of the 用户中心 and, when a new item matches a pending full 求剧, auto-fulfills that request. 催更 requests are never auto-fulfilled.
+_Avoid_: recently added, new media feed
+
 模块职责与数据归属见 `docs/DOMAIN.md`，架构决策见 `docs/adr/`。

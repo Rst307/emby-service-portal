@@ -36,7 +36,13 @@ func (s *Server) portalDashboard(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/portal/login", http.StatusSeeOther)
 		return
 	}
-	s.templates.Render(w, "portal-dashboard", admin.ViewData{CSRFToken: csrfFromRequest(r), Account: account, PortalActive: "subscription"})
+	data := admin.ViewData{CSRFToken: csrfFromRequest(r), Account: account, PortalActive: "subscription"}
+	if s.recent != nil {
+		if items, err := s.recent.Recent(r.Context(), 12); err == nil {
+			data.RecentlyAdded = items
+		}
+	}
+	s.templates.Render(w, "portal-dashboard", data)
 }
 func (s *Server) portalLogout(w http.ResponseWriter, r *http.Request) {
 	if !validCSRF(r) {

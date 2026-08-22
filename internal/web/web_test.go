@@ -13,7 +13,7 @@ import (
 func TestSecurityHeadersProvideCloudflareCompatibleScriptPolicy(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/", nil)
 	response := httptest.NewRecorder()
-	securityHeaders(tmdb.PosterBaseHost(), http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	securityHeaders(tmdb.PosterBaseHost(), []string{"https://emby.example.com"}, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})).ServeHTTP(response, request)
 
@@ -29,6 +29,9 @@ func TestSecurityHeadersProvideCloudflareCompatibleScriptPolicy(t *testing.T) {
 	}
 	if !strings.Contains(policy, "img-src 'self' data: https://image.tmdb.org") {
 		t.Fatalf("CSP does not allow the TMDB poster CDN: %q", policy)
+	}
+	if !strings.Contains(policy, "https://emby.example.com") {
+		t.Fatalf("CSP does not allow the Emby image origin: %q", policy)
 	}
 	scriptPolicy := strings.SplitN(strings.SplitN(policy, "script-src ", 2)[1], ";", 2)[0]
 	if strings.Contains(scriptPolicy, "'unsafe-inline'") {

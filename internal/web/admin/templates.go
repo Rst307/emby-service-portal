@@ -13,6 +13,7 @@ import (
 
 	"github.com/Rst307/emby-service-portal/internal/domain"
 	"github.com/Rst307/emby-service-portal/internal/payments"
+	"github.com/Rst307/emby-service-portal/internal/recent"
 	"github.com/Rst307/emby-service-portal/internal/requests"
 	"github.com/Rst307/emby-service-portal/internal/tmdb"
 	"github.com/Rst307/emby-service-portal/internal/update"
@@ -73,6 +74,8 @@ type ViewData struct {
 	RequestPageSize    int
 	RequestTotalPages  int
 	RequestFilterQuery string
+	// 最近更新（library feed）
+	RecentlyAdded []recent.ItemView
 	// 系统更新（self-update）
 	Update update.State
 }

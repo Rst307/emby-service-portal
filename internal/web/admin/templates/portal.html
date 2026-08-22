@@ -85,6 +85,35 @@
       </aside>
     </section>
 
+    {{if .RecentlyAdded}}
+    <section class="seerr-panel reveal" style="--d:.12s">
+      <div class="seerr-recent-head">
+        <div>
+          <p class="seerr-eyebrow">FRESH IN LIBRARY</p>
+          <h2 class="seerr-panel-title">最近更新</h2>
+        </div>
+        <span class="seerr-mute">来自 Emby 新增影视</span>
+      </div>
+      <div class="seerr-recent-row">
+        {{range .RecentlyAdded}}
+        <figure class="seerr-recent-card">
+          <div class="seerr-recent-poster">
+            {{if .ImageURL}}<img class="seerr-recent-img" data-fallback-poster src="{{.ImageURL}}" alt="{{.Title}}" loading="lazy" referrerpolicy="no-referrer">{{else}}<span class="seerr-result-placeholder" aria-hidden="true">{{firstRune .Title}}</span>{{end}}
+            {{if gt .RequestID 0}}<span class="seerr-badge seerr-badge-inlib seerr-recent-flag">求剧已入库</span>{{end}}
+          </div>
+          <figcaption class="seerr-recent-meta">
+            <strong class="seerr-recent-title">{{.Title}}</strong>
+            <span class="seerr-recent-sub">
+              {{if .MediaType}}<span class="seerr-tag">{{mediaTypeLabel .MediaType}}</span>{{end}}
+              {{if not .DateCreated.IsZero}}<span class="seerr-mute">{{formatTime .DateCreated "01-02"}}</span>{{end}}
+            </span>
+          </figcaption>
+        </figure>
+        {{end}}
+      </div>
+    </section>
+    {{end}}
+
     <section class="seerr-panel reveal" style="--d:.14s">
       <p class="seerr-eyebrow">MEMBER OPTIONS</p>
       <h2 class="seerr-panel-title">需要办理什么？</h2>
